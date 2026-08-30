@@ -1,0 +1,33 @@
+# Dependencies / virtualenv
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Env files (never commit real secrets)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Local dev-mode file uploads (see app/services/storage_service.py) - never
+# used once Supabase Storage is configured, never real user content either way.
+uploads/*
+!uploads/.gitkeep
+!uploads/questions/
+
+# Testing / coverage
+.pytest_cache/
+coverage/
+.coverage
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+*.pid
