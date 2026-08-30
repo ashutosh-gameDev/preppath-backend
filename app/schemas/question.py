@@ -31,6 +31,19 @@ class QuestionBase(ORMModel):
     source: str | None = None
     tags: list[str] = []
 
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _tags_as_strings(cls, v: list) -> list[str]:
+        # Inbound (create/update request bodies) this is already a list of
+        # plain strings. Outbound (QuestionAdminOut built straight from the
+        # Question ORM object) `tags` is the `Tag` relationship - a list of
+        # Tag objects, not strings - so it needs unwrapping to `.name` here
+        # or every response with a non-empty tag list 500s on serialization
+        # (only ever went unnoticed because every prior test used tags=[]).
+        if v is None:
+            return []
+        return [item.name if hasattr(item, "name") and not isinstance(item, str) else item for item in v]
+
     @field_validator("correct_option")
     @classmethod
     def validate_correct_option(cls, v: str) -> str:
