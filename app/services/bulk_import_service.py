@@ -30,7 +30,7 @@ REQUIRED_COLUMNS = [
 # course/subject are handled specially in validate_rows (row column OR
 # BulkImportDefaults, not a flat required list) - listed here only so the
 # frontend's "what columns are optional" copy/template stays accurate.
-OPTIONAL_COLUMNS = ["course", "subject", "explanation", "topic", "exam", "year", "difficulty", "type", "source", "tags"]
+OPTIONAL_COLUMNS = ["course", "subject", "explanation", "topic", "exam", "year", "difficulty", "type", "source", "language", "tags"]
 
 
 def _parse_csv(raw: bytes) -> list[dict]:
@@ -125,6 +125,7 @@ def validate_rows(
             year_raw = str(row.get("year", "")).strip()
             exam_raw = str(row.get("exam", "")).strip()
             source_raw = str(row.get("source", "")).strip()
+            language_raw = str(row.get("language", "")).strip()
             tags_raw = str(row.get("tags", "")).strip()
             payload = QuestionCreate(
                 question_text=str(row["question"]).strip(),
@@ -139,6 +140,7 @@ def validate_rows(
                 exam_id=_resolve_exam_id(db, exam_raw) if exam_raw else defaults.exam_id,
                 year=int(float(year_raw)) if year_raw else defaults.year,
                 source=source_raw or defaults.source,
+                language=language_raw or defaults.language,
                 tags=[t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else [],
                 course_id=course.id,
                 subject_id=subject.id,

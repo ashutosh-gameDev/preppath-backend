@@ -29,6 +29,9 @@ class QuestionBase(ORMModel):
     question_type: str = "practice"
     year: int | None = None
     source: str | None = None
+    # Free text, not an enum, so a new language never needs a migration -
+    # same reasoning as question_type. e.g. "English", "Hindi".
+    language: str | None = None
     tags: list[str] = []
 
     @field_validator("tags", mode="before")
@@ -60,6 +63,12 @@ class QuestionBase(ORMModel):
             raise ValueError("difficulty must be one of easy, medium, hard")
         return v
 
+    @field_validator("language")
+    @classmethod
+    def _normalize_language(cls, v: str | None) -> str | None:
+        v = (v or "").strip()
+        return v or None
+
 
 class QuestionCreate(QuestionBase):
     course_id: uuid.UUID
@@ -86,6 +95,7 @@ class QuestionUpdate(ORMModel):
     question_type: str | None = None
     year: int | None = None
     source: str | None = None
+    language: str | None = None
     tags: list[str] | None = None
     course_id: uuid.UUID | None = None
     subject_id: uuid.UUID | None = None
@@ -97,6 +107,10 @@ class QuestionUpdate(ORMModel):
 class QuestionAdminOut(QuestionBase):
     """Full question payload including the answer - admin / review use only."""
     id: uuid.UUID
+    # Short sequential number ("Q1042") assigned once at creation, for
+    # referencing/searching a question without pasting its UUID - see
+    # migration 0005. Never set by the client, always DB-assigned.
+    display_number: int
     course_id: uuid.UUID
     subject_id: uuid.UUID
     topic_id: uuid.UUID | None
@@ -128,11 +142,12 @@ class QuestionAttemptOut(ORMModel):
     question_type: str
     subject_id: uuid.UUID
     topic_id: uuid.UUID | None
-    # Paper tag (exam + year + source), shown as a badge in flashcards/PYQ
-    # browsing when the question was tagged to a specific paper - all null
-    # for ordinary practice questions.
+    # Paper tag (exam + year + source + language), shown as a badge in
+    # flashcards/PYQ browsing when the question was tagged to a specific
+    # paper - all null for ordinary practice questions.
     year: int | None = None
     source: str | None = None
+    language: str | None = None
     exam_name: str | None = None
 
 
@@ -179,6 +194,7 @@ class BulkImportDefaults(ORMModel):
     exam_id: uuid.UUID | None = None
     year: int | None = None
     source: str | None = None
+    language: str | None = None
     difficulty: str | None = None
     question_type: str | None = None
     # Bulk-imported rows always land as drafts regardless (see

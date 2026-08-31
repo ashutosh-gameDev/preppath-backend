@@ -50,10 +50,12 @@ def list_questions(
     exam_id: uuid.UUID | None = None,
     year: int | None = None,
     source: str | None = None,
+    language: str | None = None,
     difficulty: str | None = None,
     question_type: str | None = None,
     status: str | None = None,
     search: str | None = None,
+    display_number: int | None = Query(None, description="Exact match on the short question # (e.g. 1042)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     admin: User = Depends(require_content_access),
@@ -72,12 +74,16 @@ def list_questions(
         q = q.where(Question.year == year)
     if source:
         q = q.where(Question.source == source)
+    if language:
+        q = q.where(Question.language == language)
     if difficulty:
         q = q.where(Question.difficulty == difficulty)
     if question_type:
         q = q.where(Question.question_type == question_type)
     if status:
         q = q.where(Question.status == status)
+    if display_number:
+        q = q.where(Question.display_number == display_number)
     if search:
         q = q.where(Question.question_text.ilike(f"%{search}%"))
 
@@ -97,14 +103,15 @@ def list_papers(admin: User = Depends(require_content_access), db: Session = Dep
     from app.models.exam import Exam
 
     rows = db.execute(
-        select(Question.exam_id, Exam.name, Question.year, Question.source, func.count(Question.id))
+        select(Question.exam_id, Exam.name, Question.year, Question.source, Question.language, func.count(Question.id))
         .join(Exam, Exam.id == Question.exam_id)
         .where(Question.exam_id.isnot(None), Question.year.isnot(None), Question.source.isnot(None))
-        .group_by(Question.exam_id, Exam.name, Question.year, Question.source)
+        .group_by(Question.exam_id, Exam.name, Question.year, Question.source, Question.language)
         .order_by(Question.year.desc(), Exam.name)
     ).all()
     return [
-        {"exam_id": r[0], "exam_name": r[1], "year": r[2], "source": r[3], "question_count": r[4]} for r in rows
+        {"exam_id": r[0], "exam_name": r[1], "year": r[2], "source": r[3], "language": r[4], "question_count": r[5]}
+        for r in rows
     ]
 
 

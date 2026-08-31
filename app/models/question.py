@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, ForeignKey, Integer, String, Table, Text
+from sqlalchemy import Column, ForeignKey, Integer, Sequence, String, Table, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,6 +31,20 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     variable-option-count question type (e.g. multi-select) is added later.
     """
     __tablename__ = "questions"
+
+    # Short, stable, human-friendly number ("Q1042") so a question can be
+    # referenced/searched by admins/interns without pasting a UUID - never
+    # reused, assigned once at insert via a dedicated DB sequence (see
+    # migration 0005) rather than derived from row count so it survives
+    # deletes without shifting.
+    display_number: Mapped[int] = mapped_column(
+        Integer,
+        Sequence("questions_display_number_seq"),
+        server_default=text("nextval('questions_display_number_seq')"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
 
     course_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
@@ -66,6 +80,10 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     question_type: Mapped[str] = mapped_column(String(20), default=QuestionType.PRACTICE, nullable=False, index=True)
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Paper-level tag, same family as year/source (e.g. "English", "Hindi") -
+    # free text rather than an enum so a new language never needs a
+    # migration, matching the extensibility approach used for question_type.
+    language: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=ContentStatus.DRAFT, nullable=False, index=True)
 
     created_by: Mapped[uuid.UUID | None] = mapped_column(
