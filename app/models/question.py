@@ -1,11 +1,11 @@
 import uuid
 
-from sqlalchemy import Column, ForeignKey, Integer, Sequence, String, Table, Text, text
+from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, Sequence, String, Table, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
-from app.models.enums import ContentStatus, CorrectOption, Difficulty, QuestionType
+from app.models.enums import ContentStatus, CorrectOption, Difficulty, QuestionFormat, QuestionType
 
 question_tags = Table(
     "question_tags",
@@ -31,6 +31,20 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     variable-option-count question type (e.g. multi-select) is added later.
     """
     __tablename__ = "questions"
+    __table_args__ = (
+        # Mirrors the conditional requirement Pydantic already enforces
+        # (QuestionBase._validate_format) at the DB layer too, so a bad
+        # INSERT/UPDATE that bypasses the API can't leave a half-formed row:
+        # an MCQ needs all 4 options + a correct_option; a fill-in-the-blank
+        # needs correct_answer_text and nothing else.
+        CheckConstraint(
+            "(question_format = 'mcq' AND option_a IS NOT NULL AND option_b IS NOT NULL "
+            "AND option_c IS NOT NULL AND option_d IS NOT NULL AND correct_option IS NOT NULL) "
+            "OR "
+            "(question_format = 'fill_blank' AND correct_answer_text IS NOT NULL)",
+            name="ck_questions_format_fields",
+        ),
+    )
 
     # Short, stable, human-friendly number ("Q1042") so a question can be
     # referenced/searched by admins/interns without pasting a UUID - never
@@ -62,10 +76,18 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
-    option_a: Mapped[str] = mapped_column(Text, nullable=False)
-    option_b: Mapped[str] = mapped_column(Text, nullable=False)
-    option_c: Mapped[str] = mapped_column(Text, nullable=False)
-    option_d: Mapped[str] = mapped_column(Text, nullable=False)
+    # "mcq" (default, original shape - 4 inline options) or "fill_blank" (a
+    # single free-text correct answer, no options at all). See
+    # ck_questions_format_fields above for which fields each format requires.
+    question_format: Mapped[str] = mapped_column(String(20), default=QuestionFormat.MCQ, nullable=False, index=True)
+
+    # NULL for a fill_blank question - required for mcq (enforced by
+    # ck_questions_format_fields, not by the column itself, since which
+    # fields are required depends on question_format).
+    option_a: Mapped[str | None] = mapped_column(Text, nullable=True)
+    option_b: Mapped[str | None] = mapped_column(Text, nullable=True)
+    option_c: Mapped[str | None] = mapped_column(Text, nullable=True)
+    option_d: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Optional per-option images (e.g. a diagram as one of the choices) -
     # independent of `image_url` (the question-stem image) and of each other;
     # most questions leave all four null.
@@ -73,7 +95,9 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     option_b_image: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     option_c_image: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     option_d_image: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    correct_option: Mapped[str] = mapped_column(String(1), nullable=False)  # CorrectOption
+    correct_option: Mapped[str | None] = mapped_column(String(1), nullable=True)  # CorrectOption, mcq only
+    # The accepted answer for a fill_blank question - NULL for mcq.
+    correct_answer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     difficulty: Mapped[str] = mapped_column(String(10), default=Difficulty.MEDIUM, nullable=False)

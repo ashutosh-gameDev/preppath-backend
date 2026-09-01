@@ -53,6 +53,7 @@ def list_questions(
     language: str | None = None,
     difficulty: str | None = None,
     question_type: str | None = None,
+    question_format: str | None = None,
     status: str | None = None,
     search: str | None = None,
     display_number: int | None = Query(None, description="Exact match on the short question # (e.g. 1042)"),
@@ -80,6 +81,8 @@ def list_questions(
         q = q.where(Question.difficulty == difficulty)
     if question_type:
         q = q.where(Question.question_type == question_type)
+    if question_format:
+        q = q.where(Question.question_format == question_format)
     if status:
         q = q.where(Question.status == status)
     if display_number:

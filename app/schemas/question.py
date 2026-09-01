@@ -1,29 +1,38 @@
 import uuid
 from datetime import datetime
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 
 from app.schemas.common import ORMModel
 
 VALID_OPTIONS = {"A", "B", "C", "D"}
 VALID_DIFFICULTY = {"easy", "medium", "hard"}
 VALID_STATUS = {"draft", "published", "archived"}
+VALID_FORMATS = {"mcq", "fill_blank"}
 
 
 class QuestionBase(ORMModel):
     question_text: str
     image_url: str | None = None
-    option_a: str
-    option_b: str
-    option_c: str
-    option_d: str
+    # "mcq" (default - 4 inline options, one marked correct) or "fill_blank"
+    # (a single free-text correct_answer_text, no options at all).
+    question_format: str = "mcq"
+    # Required for mcq, must be null for fill_blank - enforced below in
+    # _validate_format (and mirrored as a DB CHECK, ck_questions_format_fields,
+    # so a bad row can't land even bypassing this API).
+    option_a: str | None = None
+    option_b: str | None = None
+    option_c: str | None = None
+    option_d: str | None = None
     # Optional per-option images (e.g. one choice is a diagram) - independent
     # of image_url (the question-stem image); most questions leave these null.
     option_a_image: str | None = None
     option_b_image: str | None = None
     option_c_image: str | None = None
     option_d_image: str | None = None
-    correct_option: str
+    correct_option: str | None = None
+    # The accepted answer for a fill_blank question - null for mcq.
+    correct_answer_text: str | None = None
     explanation: str | None = None
     difficulty: str = "medium"
     question_type: str = "practice"
@@ -47,9 +56,19 @@ class QuestionBase(ORMModel):
             return []
         return [item.name if hasattr(item, "name") and not isinstance(item, str) else item for item in v]
 
+    @field_validator("question_format")
+    @classmethod
+    def validate_question_format(cls, v: str) -> str:
+        v = (v or "mcq").strip().lower()
+        if v not in VALID_FORMATS:
+            raise ValueError("question_format must be one of mcq, fill_blank")
+        return v
+
     @field_validator("correct_option")
     @classmethod
-    def validate_correct_option(cls, v: str) -> str:
+    def validate_correct_option(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
         v = v.strip().upper()
         if v not in VALID_OPTIONS:
             raise ValueError("correct_option must be one of A, B, C, D")
@@ -69,6 +88,25 @@ class QuestionBase(ORMModel):
         v = (v or "").strip()
         return v or None
 
+    @model_validator(mode="after")
+    def _validate_format(self) -> "QuestionBase":
+        if self.question_format == "mcq":
+            missing = [
+                name
+                for name, val in (
+                    ("option_a", self.option_a), ("option_b", self.option_b),
+                    ("option_c", self.option_c), ("option_d", self.option_d),
+                    ("correct_option", self.correct_option),
+                )
+                if not val
+            ]
+            if missing:
+                raise ValueError(f"mcq question is missing: {', '.join(missing)}")
+        elif self.question_format == "fill_blank":
+            if not self.correct_answer_text or not self.correct_answer_text.strip():
+                raise ValueError("fill_blank question needs correct_answer_text")
+        return self
+
 
 class QuestionCreate(QuestionBase):
     course_id: uuid.UUID
@@ -81,6 +119,7 @@ class QuestionCreate(QuestionBase):
 class QuestionUpdate(ORMModel):
     question_text: str | None = None
     image_url: str | None = None
+    question_format: str | None = None
     option_a: str | None = None
     option_b: str | None = None
     option_c: str | None = None
@@ -90,6 +129,7 @@ class QuestionUpdate(ORMModel):
     option_c_image: str | None = None
     option_d_image: str | None = None
     correct_option: str | None = None
+    correct_answer_text: str | None = None
     explanation: str | None = None
     difficulty: str | None = None
     question_type: str | None = None
@@ -130,10 +170,13 @@ class QuestionAttemptOut(ORMModel):
     id: uuid.UUID
     question_text: str
     image_url: str | None
-    option_a: str
-    option_b: str
-    option_c: str
-    option_d: str
+    question_format: str = "mcq"
+    # Null for a fill_blank question (no options to show - the student just
+    # types an answer).
+    option_a: str | None = None
+    option_b: str | None = None
+    option_c: str | None = None
+    option_d: str | None = None
     option_a_image: str | None = None
     option_b_image: str | None = None
     option_c_image: str | None = None
@@ -152,7 +195,8 @@ class QuestionAttemptOut(ORMModel):
 
 
 class QuestionReviewOut(QuestionAttemptOut):
-    correct_option: str
+    correct_option: str | None = None
+    correct_answer_text: str | None = None
     explanation: str | None
 
 

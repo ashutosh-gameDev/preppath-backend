@@ -39,6 +39,15 @@ class CorrectOption(StrEnum):
     D = "D"
 
 
+class QuestionFormat(StrEnum):
+    """Which shape a question takes - MCQ (4 inline options, one marked
+    correct) is the original and by far the most common; FILL_BLANK is a
+    single free-text correct answer with no options at all (e.g. "The
+    capital of France is ___")."""
+    MCQ = "mcq"
+    FILL_BLANK = "fill_blank"
+
+
 class QuestionType(StrEnum):
     """Extensible: new values can be added without a schema migration."""
     PRACTICE = "practice"
