@@ -1,7 +1,6 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from slugify import slugify
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -12,6 +11,8 @@ from app.models.course import Course, Subject, Topic
 from app.models.user import User
 from app.schemas.common import Message
 from app.schemas.course import (
+    BulkCourseImportRequest,
+    BulkCourseImportResult,
     CourseCreate,
     CourseTreeOut,
     CourseUpdate,
@@ -22,25 +23,11 @@ from app.schemas.course import (
     TopicOut,
     TopicUpdate,
 )
+from app.services import course_import_service
 from app.services.admin_log_service import log_action
+from app.services.course_service import unique_slug as _unique_slug
 
 router = APIRouter(prefix="/admin/courses", tags=["admin:courses"])
-
-
-def _unique_slug(db: Session, model, name: str, exclude_id: uuid.UUID | None = None, scope_filter=None) -> str:
-    base = slugify(name)
-    slug = base
-    i = 1
-    while True:
-        q = select(model).where(model.slug == slug)
-        if exclude_id:
-            q = q.where(model.id != exclude_id)
-        if scope_filter is not None:
-            q = q.where(scope_filter)
-        if db.execute(q).scalar_one_or_none() is None:
-            return slug
-        i += 1
-        slug = f"{base}-{i}"
 
 
 @router.get("", response_model=list[CourseTreeOut])
@@ -61,6 +48,25 @@ def create_course(payload: CourseCreate, admin: User = Depends(require_admin), d
     db.flush()
     log_action(db, admin.id, "create", "course", course.id)
     return course
+
+
+@router.post("/bulk-import", response_model=BulkCourseImportResult)
+def bulk_import_courses(payload: BulkCourseImportRequest, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Creates a whole course -> subjects -> topics structure from one JSON
+    document instead of the one-at-a-time admin UI - the natural shape for
+    AI-generated syllabus content. Idempotent by name (case-insensitive):
+    re-importing the same or an extended document only adds what's missing,
+    so it's safe to generate more content later and re-upload."""
+    result = course_import_service.import_courses(db, payload)
+    log_action(
+        db, admin.id, "bulk_import", "course",
+        extra={
+            "courses_created": result.courses_created,
+            "subjects_created": result.subjects_created,
+            "topics_created": result.topics_created,
+        },
+    )
+    return result
 
 
 @router.patch("/{course_id}", response_model=CourseTreeOut)

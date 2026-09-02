@@ -86,3 +86,44 @@ class CourseOut(CourseBase):
 
 class CourseTreeOut(CourseOut):
     subjects: list[SubjectOut] = Field(default_factory=list)
+
+
+# ---- Bulk import (course -> subjects -> topics, one JSON document) ----
+# The natural shape for AI-generated syllabus content - see
+# course_import_service.import_courses for the idempotent-by-name matching.
+
+
+class BulkTopicInput(ORMModel):
+    name: str
+    order_index: int = 0
+    is_published: bool = False
+    video_url: str | None = None
+
+
+class BulkSubjectInput(ORMModel):
+    name: str
+    order_index: int = 0
+    is_published: bool = False
+    topics: list[BulkTopicInput] = Field(default_factory=list)
+
+
+class BulkCourseInput(ORMModel):
+    name: str
+    description: str | None = None
+    icon: str | None = None
+    is_published: bool = False
+    subjects: list[BulkSubjectInput] = Field(default_factory=list)
+
+
+class BulkCourseImportRequest(ORMModel):
+    courses: list[BulkCourseInput]
+
+
+class BulkCourseImportResult(ORMModel):
+    courses_created: int
+    subjects_created: int
+    topics_created: int
+    # Course names that already existed (matched case-insensitively) - not
+    # duplicated, but their subjects/topics were still processed against the
+    # existing course so a partial re-import still adds what's new.
+    courses_skipped: list[str]
