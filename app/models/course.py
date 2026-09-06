@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import ARRAY, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -54,9 +54,33 @@ class Topic(Base, UUIDPKMixin, TimestampMixin):
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Optional syllabus video lecture (YouTube link) - shown alongside the
     # topic in the student "Syllabus" tab, separate from practice questions.
+    # Kept even though a topic can now also have subtopics with their own
+    # video lists - this is the "whole chapter overview" video, if any.
     video_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
     subject: Mapped["Subject"] = relationship(back_populates="topics")
+    subtopics: Mapped[list["Subtopic"]] = relationship(
+        back_populates="topic", cascade="all, delete-orphan", order_by="Subtopic.order_index"
+    )
+
+
+class Subtopic(Base, UUIDPKMixin, TimestampMixin):
+    """A finer breakdown within a topic (e.g. Topic 'Kinematics' ->
+    Subtopic 'Projectile Motion') - each can carry its own list of video
+    lessons, unlike a Topic which has at most one overview video_url."""
+    __tablename__ = "subtopics"
+    __table_args__ = (UniqueConstraint("topic_id", "slug", name="uq_subtopic_topic_slug"),)
+
+    topic_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("topics.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    youtube_videos: Mapped[list[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
+
+    topic: Mapped["Topic"] = relationship(back_populates="subtopics")
 
 
 class TopicProgress(Base, UUIDPKMixin):

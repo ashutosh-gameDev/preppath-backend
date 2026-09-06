@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import require_admin, require_content_access
 from app.db.session import get_db
-from app.models.course import Course, Subject, Topic
+from app.models.course import Course, Subject, Subtopic, Topic
 from app.models.user import User
 from app.schemas.common import Message
 from app.schemas.course import (
@@ -19,6 +19,9 @@ from app.schemas.course import (
     SubjectCreate,
     SubjectOut,
     SubjectUpdate,
+    SubtopicCreate,
+    SubtopicOut,
+    SubtopicUpdate,
     TopicCreate,
     TopicOut,
     TopicUpdate,
@@ -36,7 +39,9 @@ def list_courses(admin: User = Depends(require_content_access), db: Session = De
     # content_editor accounts need to read the tree to tag questions to a
     # course/subject/topic, even though they can't create/edit/delete it.
     return db.execute(
-        select(Course).options(selectinload(Course.subjects).selectinload(Subject.topics)).order_by(Course.name)
+        select(Course)
+        .options(selectinload(Course.subjects).selectinload(Subject.topics).selectinload(Topic.subtopics))
+        .order_by(Course.name)
     ).scalars().all()
 
 
@@ -181,3 +186,43 @@ def delete_topic(topic_id: uuid.UUID, admin: User = Depends(require_admin), db: 
         raise HTTPException(status_code=409, detail="Cannot delete a topic that has questions referencing it")
     log_action(db, admin.id, "delete", "topic", topic_id)
     return Message(detail="Topic deleted")
+
+
+# --- Subtopics -------------------------------------------------------------------
+
+@router.post("/topics/{topic_id}/subtopics", response_model=SubtopicOut)
+def create_subtopic(topic_id: uuid.UUID, payload: SubtopicCreate, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    topic = db.get(Topic, topic_id)
+    if topic is None:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    slug = _unique_slug(db, Subtopic, payload.name, scope_filter=Subtopic.topic_id == topic_id)
+    subtopic = Subtopic(**payload.model_dump(), topic_id=topic_id, slug=slug)
+    db.add(subtopic)
+    db.flush()
+    log_action(db, admin.id, "create", "subtopic", subtopic.id)
+    return subtopic
+
+
+@router.patch("/subtopics/{subtopic_id}", response_model=SubtopicOut)
+def update_subtopic(subtopic_id: uuid.UUID, payload: SubtopicUpdate, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    subtopic = db.get(Subtopic, subtopic_id)
+    if subtopic is None:
+        raise HTTPException(status_code=404, detail="Subtopic not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        if field == "name" and value:
+            subtopic.slug = _unique_slug(db, Subtopic, value, exclude_id=subtopic.id, scope_filter=Subtopic.topic_id == subtopic.topic_id)
+        setattr(subtopic, field, value)
+    db.flush()
+    log_action(db, admin.id, "update", "subtopic", subtopic.id)
+    return subtopic
+
+
+@router.delete("/subtopics/{subtopic_id}", response_model=Message)
+def delete_subtopic(subtopic_id: uuid.UUID, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    subtopic = db.get(Subtopic, subtopic_id)
+    if subtopic is None:
+        raise HTTPException(status_code=404, detail="Subtopic not found")
+    db.delete(subtopic)
+    db.flush()
+    log_action(db, admin.id, "delete", "subtopic", subtopic_id)
+    return Message(detail="Subtopic deleted")

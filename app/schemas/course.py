@@ -23,10 +23,35 @@ class TopicUpdate(ORMModel):
     video_url: str | None = None
 
 
+class SubtopicBase(ORMModel):
+    name: str
+    order_index: int = 0
+    is_published: bool = False
+    youtube_videos: list[str] = Field(default_factory=list)
+
+
+class SubtopicCreate(SubtopicBase):
+    pass
+
+
+class SubtopicUpdate(ORMModel):
+    name: str | None = None
+    order_index: int | None = None
+    is_published: bool | None = None
+    youtube_videos: list[str] | None = None
+
+
+class SubtopicOut(SubtopicBase):
+    id: uuid.UUID
+    topic_id: uuid.UUID
+    slug: str
+
+
 class TopicOut(TopicBase):
     id: uuid.UUID
     subject_id: uuid.UUID
     slug: str
+    subtopics: list[SubtopicOut] = Field(default_factory=list)
 
 
 class TopicProgressIn(ORMModel):
@@ -88,9 +113,17 @@ class CourseTreeOut(CourseOut):
     subjects: list[SubjectOut] = Field(default_factory=list)
 
 
-# ---- Bulk import (course -> subjects -> topics, one JSON document) ----
+# ---- Bulk import (course -> subjects -> topics -> subtopics, one JSON
+# document) ----
 # The natural shape for AI-generated syllabus content - see
 # course_import_service.import_courses for the idempotent-by-name matching.
+
+
+class BulkSubtopicInput(ORMModel):
+    name: str
+    order_index: int = 0
+    is_published: bool = False
+    youtube_videos: list[str] = Field(default_factory=list)
 
 
 class BulkTopicInput(ORMModel):
@@ -98,6 +131,7 @@ class BulkTopicInput(ORMModel):
     order_index: int = 0
     is_published: bool = False
     video_url: str | None = None
+    subtopics: list[BulkSubtopicInput] = Field(default_factory=list)
 
 
 class BulkSubjectInput(ORMModel):
@@ -123,6 +157,7 @@ class BulkCourseImportResult(ORMModel):
     courses_created: int
     subjects_created: int
     topics_created: int
+    subtopics_created: int
     # Course names that already existed (matched case-insensitively) - not
     # duplicated, but their subjects/topics were still processed against the
     # existing course so a partial re-import still adds what's new.

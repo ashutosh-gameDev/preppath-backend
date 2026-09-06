@@ -11,7 +11,7 @@ than tracking what was already imported.
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.course import Course, Subject, Topic
+from app.models.course import Course, Subject, Subtopic, Topic
 from app.schemas.course import BulkCourseImportRequest, BulkCourseImportResult
 from app.services.course_service import unique_slug
 
@@ -24,7 +24,7 @@ def _find_by_name_ci(db: Session, model, name: str, **scope):
 
 
 def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseImportResult:
-    courses_created = subjects_created = topics_created = 0
+    courses_created = subjects_created = topics_created = subtopics_created = 0
     courses_skipped: list[str] = []
 
     for course_in in payload.courses:
@@ -72,9 +72,32 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
                     db.flush()
                     topics_created += 1
 
+                for subtopic_in in topic_in.subtopics:
+                    subtopic = _find_by_name_ci(db, Subtopic, subtopic_in.name, topic_id=topic.id)
+                    if subtopic is None:
+                        subtopic = Subtopic(
+                            name=subtopic_in.name.strip(),
+                            order_index=subtopic_in.order_index,
+                            is_published=subtopic_in.is_published,
+                            youtube_videos=subtopic_in.youtube_videos,
+                            topic_id=topic.id,
+                            slug=unique_slug(db, Subtopic, subtopic_in.name, scope_filter=Subtopic.topic_id == topic.id),
+                        )
+                        db.add(subtopic)
+                        db.flush()
+                        subtopics_created += 1
+                    elif subtopic_in.youtube_videos and not subtopic.youtube_videos:
+                        # A re-import that adds videos to a subtopic created
+                        # earlier without any (e.g. a first pass that only
+                        # had names) - fill them in rather than requiring a
+                        # one-at-a-time edit for something bulk import itself
+                        # could just as well backfill.
+                        subtopic.youtube_videos = subtopic_in.youtube_videos
+
     return BulkCourseImportResult(
         courses_created=courses_created,
         subjects_created=subjects_created,
         topics_created=topics_created,
+        subtopics_created=subtopics_created,
         courses_skipped=courses_skipped,
     )
