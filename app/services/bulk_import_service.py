@@ -18,19 +18,18 @@ from app.schemas.question import BulkImportDefaults, BulkImportRowError, Questio
 # course/subject are only "always required" when nothing was picked on the
 # Upload Paper screen (see BulkImportDefaults) - validate_rows relaxes these
 # per-call once defaults cover them, so a paper's file can skip the columns
-# entirely.
-REQUIRED_COLUMNS = [
-    "question",
-    "option_a",
-    "option_b",
-    "option_c",
-    "option_d",
-    "correct_answer",
-]
+# entirely. option_a-d are only required when the row's format is mcq (the
+# default) - a fill_blank row needs just question + correct_answer.
+REQUIRED_COLUMNS = ["question", "correct_answer"]
+MCQ_REQUIRED_COLUMNS = ["option_a", "option_b", "option_c", "option_d"]
+FORMAT_VALUES = {"mcq", "fill_blank"}
 # course/subject are handled specially in validate_rows (row column OR
 # BulkImportDefaults, not a flat required list) - listed here only so the
 # frontend's "what columns are optional" copy/template stays accurate.
-OPTIONAL_COLUMNS = ["course", "subject", "explanation", "topic", "exam", "year", "difficulty", "type", "source", "language", "tags"]
+OPTIONAL_COLUMNS = [
+    "course", "subject", "explanation", "topic", "exam", "year", "difficulty",
+    "type", "source", "language", "tags", "format",
+]
 
 
 def _parse_csv(raw: bytes) -> list[dict]:
@@ -83,9 +82,16 @@ def validate_rows(
         row = {(k or "").strip().lower(): (v if v is not None else "") for k, v in raw_row.items()}
         row_errors: list[str] = []
 
+        format_raw = str(row.get("format") or row.get("question_format") or "").strip().lower()
+        question_format = format_raw if format_raw in FORMAT_VALUES else "mcq"
+
         for col in REQUIRED_COLUMNS:
             if not str(row.get(col, "")).strip():
                 row_errors.append(f"Missing required column '{col}'")
+        if question_format == "mcq":
+            for col in MCQ_REQUIRED_COLUMNS:
+                if not str(row.get(col, "")).strip():
+                    row_errors.append(f"Missing required column '{col}'")
 
         # course/subject: the row's own column wins when present (lets a
         # mixed-course file still work); otherwise fall back to the paper
@@ -127,13 +133,8 @@ def validate_rows(
             source_raw = str(row.get("source", "")).strip()
             language_raw = str(row.get("language", "")).strip()
             tags_raw = str(row.get("tags", "")).strip()
-            payload = QuestionCreate(
+            common = dict(
                 question_text=str(row["question"]).strip(),
-                option_a=str(row["option_a"]).strip(),
-                option_b=str(row["option_b"]).strip(),
-                option_c=str(row["option_c"]).strip(),
-                option_d=str(row["option_d"]).strip(),
-                correct_option=str(row["correct_answer"]).strip(),
                 explanation=str(row.get("explanation") or "").strip() or None,
                 difficulty=(str(row.get("difficulty") or "").strip().lower() or defaults.difficulty or "medium"),
                 question_type=(str(row.get("type") or "").strip().lower() or defaults.question_type or "practice"),
@@ -146,6 +147,22 @@ def validate_rows(
                 subject_id=subject.id,
                 topic_id=topic.id if topic else None,
             )
+            if question_format == "mcq":
+                payload = QuestionCreate(
+                    **common,
+                    question_format="mcq",
+                    option_a=str(row["option_a"]).strip(),
+                    option_b=str(row["option_b"]).strip(),
+                    option_c=str(row["option_c"]).strip(),
+                    option_d=str(row["option_d"]).strip(),
+                    correct_option=str(row["correct_answer"]).strip(),
+                )
+            else:
+                payload = QuestionCreate(
+                    **common,
+                    question_format="fill_blank",
+                    correct_answer_text=str(row["correct_answer"]).strip(),
+                )
             valid.append(payload)
         except (ValidationError, ValueError) as e:
             errors.append(BulkImportRowError(row_number=i, errors=[str(e)], raw=row))

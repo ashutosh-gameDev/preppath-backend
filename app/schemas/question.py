@@ -245,6 +245,15 @@ class BulkImportDefaults(ORMModel):
     # bulk_import_commit) - review before publishing, same as before.
 
 
+class BulkImportJsonPreviewRequest(ORMModel):
+    """Same as uploading a CSV/XLSX file, but the rows come as a pasted/
+    generated JSON array instead - each dict uses the same column names
+    (question, option_a-d, correct_answer, course, subject, ...) an AI can
+    produce directly without needing to know internal course/subject UUIDs."""
+    rows: list[dict]
+    defaults: BulkImportDefaults | None = None
+
+
 class BulkImportCommitRequest(ORMModel):
     rows: list[QuestionCreate]
 

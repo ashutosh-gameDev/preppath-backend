@@ -16,6 +16,7 @@ from app.schemas.question import (
     BulkImportCommitRequest,
     BulkImportCommitResult,
     BulkImportDefaults,
+    BulkImportJsonPreviewRequest,
     BulkImportPreview,
     QuestionAdminOut,
     QuestionCreate,
@@ -207,6 +208,21 @@ async def bulk_import_preview(
     valid, errors = bulk_import_service.validate_rows(db, rows, _parse_defaults(defaults))
     return BulkImportPreview(
         total_rows=len(rows), valid_count=len(valid), invalid_count=len(errors), errors=errors, valid_rows=valid
+    )
+
+
+@router.post("/bulk-import/preview-json", response_model=BulkImportPreview)
+def bulk_import_preview_json(
+    payload: BulkImportJsonPreviewRequest,
+    admin: User = Depends(require_content_access),
+    db: Session = Depends(get_db),
+):
+    """Same validation as the file-upload preview above, just for rows
+    pasted/loaded as JSON instead of a CSV/XLSX file - the natural shape for
+    AI-generated question data."""
+    valid, errors = bulk_import_service.validate_rows(db, payload.rows, payload.defaults or BulkImportDefaults())
+    return BulkImportPreview(
+        total_rows=len(payload.rows), valid_count=len(valid), invalid_count=len(errors), errors=errors, valid_rows=valid
     )
 
 
