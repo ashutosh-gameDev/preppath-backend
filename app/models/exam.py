@@ -18,11 +18,13 @@ exam_event_courses = Table(
 
 class Exam(Base, UUIDPKMixin, TimestampMixin):
     """
-    A concrete exam students can follow (e.g. 'SSC CGL 2026'). Optionally
-    scoped to a Course so PYQs/mock tests built for that course can be
-    grouped under the exam. Also what individual questions tag themselves to
-    via Question.exam_id (+ year/source) to record which real PYQ paper a
-    question is from - see admin/questions.py's paper-tag handling.
+    A concrete exam students can follow (e.g. 'SSC CGL 2026') to get
+    ExamEvent reminders (application window, admit card, exam date, result).
+    Optionally scoped to a Course. Still used by Test.exam_id to tag a full
+    mock/PYQ test to a real exam - but NOT by individual question tagging
+    (Question.pyq_paper_id) any more, see models/pyq_paper.py: creating/
+    picking a PYQ paper to label a question must never create or touch an
+    Exam, so it never clutters this followable/notification list.
     """
     __tablename__ = "exams"
 

@@ -23,6 +23,7 @@ from app.api.v1.endpoints.admin import (
     dashboard as admin_dashboard,
     exams as admin_exams,
     notifications as admin_notifications,
+    pyq_papers as admin_pyq_papers,
     questions as admin_questions,
     settings as admin_settings,
     team as admin_team,
@@ -54,6 +55,7 @@ api_router.include_router(dev_auth.router)  # 404s unless ENVIRONMENT=developmen
 api_router.include_router(admin_dashboard.router)
 api_router.include_router(admin_courses.router)
 api_router.include_router(admin_questions.router)
+api_router.include_router(admin_pyq_papers.router)
 api_router.include_router(admin_tests.router)
 api_router.include_router(admin_exams.router)
 api_router.include_router(admin_notifications.router)
