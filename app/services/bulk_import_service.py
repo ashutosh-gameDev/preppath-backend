@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.course import Course, Subject, Topic
+from app.models.course import Course, Subject, Subtopic, Topic
 from app.schemas.question import BulkImportDefaults, BulkImportRowError, QuestionCreate
 
 # course/subject are only "always required" when nothing was picked on the
@@ -27,7 +27,7 @@ FORMAT_VALUES = {"mcq", "fill_blank"}
 # BulkImportDefaults, not a flat required list) - listed here only so the
 # frontend's "what columns are optional" copy/template stays accurate.
 OPTIONAL_COLUMNS = [
-    "course", "subject", "explanation", "topic", "exam", "year", "difficulty",
+    "course", "subject", "explanation", "topic", "subtopic", "exam", "year", "difficulty",
     "type", "source", "language", "tags", "format",
 ]
 
@@ -59,7 +59,12 @@ def parse_file(filename: str, raw: bytes) -> list[dict]:
     raise ValueError("Unsupported file type - upload a .csv or .xlsx file")
 
 
-def _lookup_cache(db: Session) -> tuple[dict[str, Course], dict[tuple[uuid.UUID, str], Subject], dict[tuple[uuid.UUID, str], Topic]]:
+def _lookup_cache(
+    db: Session,
+) -> tuple[
+    dict[str, Course], dict[tuple[uuid.UUID, str], Subject], dict[tuple[uuid.UUID, str], Topic],
+    dict[tuple[uuid.UUID, str], Subtopic],
+]:
     courses = {c.name.strip().lower(): c for c in db.execute(select(Course)).scalars().all()}
     subjects = {}
     for s in db.execute(select(Subject)).scalars().all():
@@ -67,14 +72,17 @@ def _lookup_cache(db: Session) -> tuple[dict[str, Course], dict[tuple[uuid.UUID,
     topics = {}
     for t in db.execute(select(Topic)).scalars().all():
         topics[(t.subject_id, t.name.strip().lower())] = t
-    return courses, subjects, topics
+    subtopics = {}
+    for st in db.execute(select(Subtopic)).scalars().all():
+        subtopics[(st.topic_id, st.name.strip().lower())] = st
+    return courses, subjects, topics, subtopics
 
 
 def validate_rows(
     db: Session, rows: list[dict], defaults: BulkImportDefaults | None = None
 ) -> tuple[list[QuestionCreate], list[BulkImportRowError]]:
     defaults = defaults or BulkImportDefaults()
-    courses, subjects, topics = _lookup_cache(db)
+    courses, subjects, topics, subtopics = _lookup_cache(db)
     valid: list[QuestionCreate] = []
     errors: list[BulkImportRowError] = []
 
@@ -123,6 +131,22 @@ def validate_rows(
         elif subject and defaults.topic_id:
             topic = next((t for t in topics.values() if t.id == defaults.topic_id), None)
 
+        # subtopic ("topic" in product vocabulary, one level finer than
+        # `topic` above which is "chapter") - only resolvable once a topic is
+        # known, since a subtopic name is only unique within its topic.
+        subtopic = None
+        subtopic_raw = str(row.get("subtopic", "")).strip()
+        if topic and subtopic_raw:
+            subtopic = subtopics.get((topic.id, subtopic_raw.lower()))
+            if subtopic is None:
+                row_errors.append(f"Unknown subtopic '{subtopic_raw}' for topic '{topic.name}'")
+        elif topic and defaults.subtopic_id:
+            candidate = next((st for st in subtopics.values() if st.id == defaults.subtopic_id), None)
+            # Only apply the paper-level default subtopic if it actually
+            # belongs to this row's resolved topic - otherwise silently
+            # leave it unset rather than cross-wiring an unrelated chapter.
+            subtopic = candidate if candidate and candidate.topic_id == topic.id else None
+
         if row_errors:
             errors.append(BulkImportRowError(row_number=i, errors=row_errors, raw=row))
             continue
@@ -146,6 +170,7 @@ def validate_rows(
                 course_id=course.id,
                 subject_id=subject.id,
                 topic_id=topic.id if topic else None,
+                subtopic_id=subtopic.id if subtopic else None,
             )
             if question_format == "mcq":
                 payload = QuestionCreate(

@@ -9,7 +9,8 @@ class PracticeSessionRequest(ORMModel):
     """Request a batch of practice questions."""
     course_id: uuid.UUID
     subject_id: uuid.UUID | None = None
-    topic_id: uuid.UUID | None = None
+    topic_id: uuid.UUID | None = None  # "chapter"
+    subtopic_id: uuid.UUID | None = None  # "topic" - finer than topic_id, independent of it
     difficulty: str | None = None
     question_type: str = "practice"
     count: int = 20

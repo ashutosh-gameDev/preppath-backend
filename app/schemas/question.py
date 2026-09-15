@@ -112,6 +112,7 @@ class QuestionCreate(QuestionBase):
     course_id: uuid.UUID
     subject_id: uuid.UUID
     topic_id: uuid.UUID | None = None
+    subtopic_id: uuid.UUID | None = None
     exam_id: uuid.UUID | None = None
     status: str = "draft"
 
@@ -140,6 +141,7 @@ class QuestionUpdate(ORMModel):
     course_id: uuid.UUID | None = None
     subject_id: uuid.UUID | None = None
     topic_id: uuid.UUID | None = None
+    subtopic_id: uuid.UUID | None = None
     exam_id: uuid.UUID | None = None
     status: str | None = None
 
@@ -154,6 +156,7 @@ class QuestionAdminOut(QuestionBase):
     course_id: uuid.UUID
     subject_id: uuid.UUID
     topic_id: uuid.UUID | None
+    subtopic_id: uuid.UUID | None
     exam_id: uuid.UUID | None
     status: str
     created_at: datetime
@@ -185,6 +188,7 @@ class QuestionAttemptOut(ORMModel):
     question_type: str
     subject_id: uuid.UUID
     topic_id: uuid.UUID | None
+    subtopic_id: uuid.UUID | None = None
     # Paper tag (exam + year + source + language), shown as a badge in
     # flashcards/PYQ browsing when the question was tagged to a specific
     # paper - all null for ordinary practice questions.
@@ -235,6 +239,7 @@ class BulkImportDefaults(ORMModel):
     course_id: uuid.UUID | None = None
     subject_id: uuid.UUID | None = None
     topic_id: uuid.UUID | None = None
+    subtopic_id: uuid.UUID | None = None
     exam_id: uuid.UUID | None = None
     year: int | None = None
     source: str | None = None
@@ -261,3 +266,21 @@ class BulkImportCommitRequest(ORMModel):
 class BulkImportCommitResult(ORMModel):
     imported: int
     skipped: int
+
+
+class BulkQuestionUpdateRequest(ORMModel):
+    """Apply one change to many existing questions at once - e.g. select 40
+    questions in the admin list and re-tag them all to a different chapter/
+    topic, or change their difficulty/status in one action. Same patch shape
+    as a single QuestionUpdate (only fields explicitly set are applied),
+    just addressed at a set of ids instead of one - see bulk_update_questions."""
+    question_ids: list[uuid.UUID]
+    patch: QuestionUpdate
+
+
+class BulkQuestionUpdateResult(ORMModel):
+    updated: int
+
+
+class BulkDeleteRequest(ORMModel):
+    question_ids: list[uuid.UUID]

@@ -69,6 +69,14 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     topic_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("topics.id", ondelete="SET NULL"), nullable=True
     )
+    # Finer than topic_id (Topic = "chapter", Subtopic = "topic" in the
+    # product's own vocabulary) - optional, independent of topic_id being
+    # set, so existing rows and imports that only know the chapter keep
+    # working. SET NULL on delete, same as topic_id, so removing a subtopic
+    # from the syllabus never cascades into deleting questions.
+    subtopic_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("subtopics.id", ondelete="SET NULL"), nullable=True
+    )
     exam_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("exams.id", ondelete="SET NULL"), nullable=True
     )
@@ -119,6 +127,7 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     course = relationship("Course")
     subject = relationship("Subject")
     topic = relationship("Topic")
+    subtopic = relationship("Subtopic")
     exam = relationship("Exam")
 
     @property

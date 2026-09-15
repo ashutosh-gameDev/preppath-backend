@@ -14,7 +14,14 @@ from app.db.session import get_db
 from app.models.test import Test, TestSection
 from app.models.user import User
 from app.schemas.common import Message
-from app.schemas.test import TestCreate, TestDetailOut, TestListItemOut, TestUpdate
+from app.schemas.test import (
+    BulkTestUpdateRequest,
+    BulkTestUpdateResult,
+    TestCreate,
+    TestDetailOut,
+    TestListItemOut,
+    TestUpdate,
+)
 from app.services import test_service
 from app.services.admin_log_service import log_action
 
@@ -87,3 +94,26 @@ def delete_test(test_id: uuid.UUID, admin: User = Depends(require_content_access
     db.flush()
     log_action(db, admin.id, "delete", "test", test_id)
     return Message(detail="Test deleted")
+
+
+@router.post("/bulk-update", response_model=BulkTestUpdateResult)
+def bulk_update_tests(
+    payload: BulkTestUpdateRequest, admin: User = Depends(require_content_access), db: Session = Depends(get_db)
+):
+    """Apply one patch (publish/unpublish/archive, or fix exam/year/course
+    tagging) to every test in `test_ids` at once - the Tests/PYQ admin
+    list's bulk-select action bar."""
+    data = payload.patch.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=400, detail="No field to update was provided")
+
+    tests = db.execute(select(Test).where(Test.id.in_(payload.test_ids))).scalars().all()
+    for test in tests:
+        for field, value in data.items():
+            setattr(test, field, value)
+    db.flush()
+    log_action(
+        db, admin.id, "bulk_update", "test",
+        extra={"test_ids": [str(tid) for tid in payload.test_ids], "fields": list(data.keys())},
+    )
+    return BulkTestUpdateResult(updated=len(tests))

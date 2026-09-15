@@ -50,11 +50,28 @@ class TestCreate(ORMModel):
 
 class TestUpdate(ORMModel):
     title: str | None = None
+    course_id: uuid.UUID | None = None
+    exam_id: uuid.UUID | None = None
+    pyq_year: int | None = None
+    pyq_paper_label: str | None = None
     duration_minutes: int | None = None
     negative_marking: float | None = None
     difficulty: str | None = None
     instructions: str | None = None
     status: str | None = None
+
+
+class BulkTestUpdateRequest(ORMModel):
+    """Same 'apply one patch to many rows at once' shape as
+    BulkQuestionUpdateRequest, for the Tests/PYQ admin list's bulk-select
+    action bar (e.g. publish/archive several papers, or fix the exam/year/
+    course tag across several at once)."""
+    test_ids: list[uuid.UUID]
+    patch: TestUpdate
+
+
+class BulkTestUpdateResult(ORMModel):
+    updated: int
 
 
 class TestSectionOut(ORMModel):

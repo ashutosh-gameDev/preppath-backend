@@ -33,6 +33,8 @@ def start_practice_session(
         q = q.where(Question.subject_id == payload.subject_id)
     if payload.topic_id:
         q = q.where(Question.topic_id == payload.topic_id)
+    if payload.subtopic_id:
+        q = q.where(Question.subtopic_id == payload.subtopic_id)
     if payload.difficulty:
         q = q.where(Question.difficulty == payload.difficulty)
     if payload.question_type:
@@ -56,6 +58,8 @@ def start_practice_session(
             q2 = q2.where(Question.subject_id == payload.subject_id)
         if payload.topic_id:
             q2 = q2.where(Question.topic_id == payload.topic_id)
+        if payload.subtopic_id:
+            q2 = q2.where(Question.subtopic_id == payload.subtopic_id)
         candidates = db.execute(q2).scalars().all()
         random.shuffle(candidates)
         selected = candidates[: payload.count]

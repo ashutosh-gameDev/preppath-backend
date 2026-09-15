@@ -18,6 +18,9 @@ from app.schemas.question import (
     BulkImportDefaults,
     BulkImportJsonPreviewRequest,
     BulkImportPreview,
+    BulkDeleteRequest,
+    BulkQuestionUpdateRequest,
+    BulkQuestionUpdateResult,
     QuestionAdminOut,
     QuestionCreate,
     QuestionUpdate,
@@ -48,6 +51,7 @@ def list_questions(
     course_id: uuid.UUID | None = None,
     subject_id: uuid.UUID | None = None,
     topic_id: uuid.UUID | None = None,
+    subtopic_id: uuid.UUID | None = None,
     exam_id: uuid.UUID | None = None,
     year: int | None = None,
     source: str | None = None,
@@ -70,6 +74,8 @@ def list_questions(
         q = q.where(Question.subject_id == subject_id)
     if topic_id:
         q = q.where(Question.topic_id == topic_id)
+    if subtopic_id:
+        q = q.where(Question.subtopic_id == subtopic_id)
     if exam_id:
         q = q.where(Question.exam_id == exam_id)
     if year:
@@ -242,6 +248,52 @@ def bulk_import_commit(payload: BulkImportCommitRequest, admin: User = Depends(r
     db.flush()
     log_action(db, admin.id, "bulk_import", "question", extra={"imported": imported})
     return BulkImportCommitResult(imported=imported, skipped=0)
+
+
+# --- Bulk edit (existing questions) ----------------------------------------------
+
+@router.post("/bulk-update", response_model=BulkQuestionUpdateResult)
+def bulk_update_questions(
+    payload: BulkQuestionUpdateRequest, admin: User = Depends(require_content_access), db: Session = Depends(get_db)
+):
+    """Apply one patch (e.g. 'move to chapter X', 'change difficulty to hard')
+    to every question in `question_ids` at once - the admin-web bulk-select
+    action bar. Same field-level semantics as the single PATCH endpoint
+    (exclude_unset - only fields the admin actually chose to change are
+    touched), just looped over a selection instead of one id."""
+    data = payload.patch.model_dump(exclude_unset=True, exclude={"tags"})
+    if not data and payload.patch.tags is None:
+        raise HTTPException(status_code=400, detail="No field to update was provided")
+
+    questions = db.execute(select(Question).where(Question.id.in_(payload.question_ids))).scalars().all()
+    tags = _get_or_create_tags(db, payload.patch.tags) if payload.patch.tags is not None else None
+    updated = 0
+    for question in questions:
+        for field, value in data.items():
+            setattr(question, field, value)
+        if tags is not None:
+            question.tags = tags
+        updated += 1
+    db.flush()
+    log_action(
+        db, admin.id, "bulk_update", "question",
+        extra={"question_ids": [str(qid) for qid in payload.question_ids], "fields": list(data.keys())},
+    )
+    return BulkQuestionUpdateResult(updated=updated)
+
+
+@router.post("/bulk-delete", response_model=Message)
+def bulk_delete_questions(
+    payload: BulkDeleteRequest, admin: User = Depends(require_content_access), db: Session = Depends(get_db)
+):
+    questions = db.execute(select(Question).where(Question.id.in_(payload.question_ids))).scalars().all()
+    for question in questions:
+        db.delete(question)
+    db.flush()
+    log_action(
+        db, admin.id, "bulk_delete", "question", extra={"question_ids": [str(qid) for qid in payload.question_ids]}
+    )
+    return Message(detail=f"{len(questions)} question(s) deleted")
 
 
 # --- Reports --------------------------------------------------------------------
