@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
 from app.db.session import get_db
+from app.models.course import Course
 from app.models.exam import Exam, ExamEvent
 from app.models.user import User
 from app.schemas.common import Message
@@ -15,6 +16,12 @@ from app.schemas.exam import ExamEventCreate, ExamEventOut, ExamEventUpdate
 from app.services.admin_log_service import log_action
 
 router = APIRouter(prefix="/admin/notifications", tags=["admin:notifications"])
+
+
+def _resolve_courses(db: Session, course_ids: list[uuid.UUID]) -> list[Course]:
+    if not course_ids:
+        return []
+    return db.execute(select(Course).where(Course.id.in_(course_ids))).scalars().all()
 
 
 @router.get("", response_model=list[ExamEventOut])
@@ -30,7 +37,9 @@ def create_notification(exam_id: uuid.UUID, payload: ExamEventCreate, admin: Use
     exam = db.get(Exam, exam_id)
     if exam is None:
         raise HTTPException(status_code=404, detail="Exam not found")
-    event = ExamEvent(**payload.model_dump(), exam_id=exam_id)
+    data = payload.model_dump(exclude={"course_ids"})
+    event = ExamEvent(**data, exam_id=exam_id)
+    event.courses = _resolve_courses(db, payload.course_ids)
     db.add(event)
     db.flush()
     log_action(db, admin.id, "create", "exam_event", event.id)
@@ -42,8 +51,11 @@ def update_notification(event_id: uuid.UUID, payload: ExamEventUpdate, admin: Us
     event = db.get(ExamEvent, event_id)
     if event is None:
         raise HTTPException(status_code=404, detail="Notification not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True, exclude={"course_ids"})
+    for field, value in data.items():
         setattr(event, field, value)
+    if payload.course_ids is not None:
+        event.courses = _resolve_courses(db, payload.course_ids)
     db.flush()
     log_action(db, admin.id, "update", "exam_event", event.id)
     return event

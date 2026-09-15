@@ -14,7 +14,10 @@ class ExamEventBase(ORMModel):
 
 
 class ExamEventCreate(ExamEventBase):
-    pass
+    # Which course(s) see this as a notification - empty means everyone
+    # (global), matching Exam.course_id's own "unset = for everyone"
+    # convention. See ExamEvent's docstring for the delivery rule.
+    course_ids: list[uuid.UUID] = []
 
 
 class ExamEventUpdate(ORMModel):
@@ -24,11 +27,16 @@ class ExamEventUpdate(ORMModel):
     event_date: date | None = None
     external_link: str | None = None
     is_published: bool | None = None
+    course_ids: list[uuid.UUID] | None = None
 
 
 class ExamEventOut(ExamEventBase):
     id: uuid.UUID
     exam_id: uuid.UUID
+    # Read off ExamEvent.course_ids, a plain property over the `courses`
+    # relationship (see models/exam.py) - from_attributes reads a property
+    # exactly like a column, so no separate unwrapping is needed here.
+    course_ids: list[uuid.UUID] = []
 
 
 class ExamBase(ORMModel):

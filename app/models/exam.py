@@ -1,23 +1,28 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, String, Table, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
 from app.models.enums import ExamEventType
 
+exam_event_courses = Table(
+    "exam_event_courses",
+    Base.metadata,
+    Column("exam_event_id", UUID(as_uuid=True), ForeignKey("exam_events.id", ondelete="CASCADE"), primary_key=True),
+    Column("course_id", UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 class Exam(Base, UUIDPKMixin, TimestampMixin):
     """
-    A concrete exam students can follow (e.g. 'SSC CGL 2026') to get
-    ExamEvent reminders (application window, admit card, exam date, result).
-    Optionally scoped to a Course. Still used by Test.exam_id to tag a full
-    mock/PYQ test to a real exam - but NOT by individual question tagging
-    (Question.paper_id) any more, see models/paper.py: creating/picking a
-    paper to label a question must never create or touch an Exam, so it
-    never clutters this followable/notification list.
+    A concrete exam students can follow (e.g. 'SSC CGL 2026'). Optionally
+    scoped to a Course so PYQs/mock tests built for that course can be
+    grouped under the exam. Also what individual questions tag themselves to
+    via Question.exam_id (+ year/source) to record which real PYQ paper a
+    question is from - see admin/questions.py's paper-tag handling.
     """
     __tablename__ = "exams"
 
@@ -38,8 +43,13 @@ class Exam(Base, UUIDPKMixin, TimestampMixin):
 class ExamEvent(Base, UUIDPKMixin, TimestampMixin):
     """
     A dated milestone for an exam (application window, admit card, exam date,
-    result...). This doubles as the source content for student notifications:
-    a student following the exam sees upcoming events as reminders.
+    result...) - the source content for student notifications. Delivered by
+    course, not by follow: a student sees an event if it targets no specific
+    courses (global - `courses` empty) or targets a course they're enrolled
+    in (see CourseEnrollment) - no per-student "follow this exam" action
+    needed. `UserExamFollow` still exists for a student's own "exams I care
+    about" bookmark list, but no longer gates what notifications they get -
+    see services/notification_service.py.
     """
     __tablename__ = "exam_events"
 
@@ -54,6 +64,13 @@ class ExamEvent(Base, UUIDPKMixin, TimestampMixin):
     is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     exam: Mapped["Exam"] = relationship(back_populates="events")
+    courses: Mapped[list["Course"]] = relationship(secondary=exam_event_courses)
+
+    @property
+    def course_ids(self) -> list[uuid.UUID]:
+        """Convenience for ExamEventOut - from_attributes reads a property
+        exactly like a column, so the schema needs no separate unwrapping."""
+        return [c.id for c in self.courses]
 
 
 class UserExamFollow(Base, UUIDPKMixin, TimestampMixin):
