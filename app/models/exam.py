@@ -11,9 +11,13 @@ from app.models.enums import ExamEventType
 
 class Exam(Base, UUIDPKMixin, TimestampMixin):
     """
-    A concrete exam students can follow (e.g. 'SSC CGL 2026'). Optionally
-    scoped to a Course so PYQs/mock tests built for that course can be
-    grouped under the exam.
+    A concrete exam students can follow (e.g. 'SSC CGL 2026') to get
+    ExamEvent reminders (application window, admit card, exam date, result).
+    Optionally scoped to a Course. Still used by Test.exam_id to tag a full
+    mock/PYQ test to a real exam - but NOT by individual question tagging
+    (Question.paper_id) any more, see models/paper.py: creating/picking a
+    paper to label a question must never create or touch an Exam, so it
+    never clutters this followable/notification list.
     """
     __tablename__ = "exams"
 

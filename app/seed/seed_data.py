@@ -3,7 +3,7 @@ Realistic demo/seed data for local development.
 
 Everything created here is clearly tagged as seed content so it can be found
 and removed later:
-  * Question.source == SEED_SOURCE
+  * Question.paper_id points at a Paper whose label == SEED_SOURCE
   * Test.title is prefixed with SEED_PREFIX
   * seeded student emails end with SEED_EMAIL_DOMAIN
 
@@ -39,6 +39,7 @@ from app.models.enums import (
 from app.models.enrollment import CourseEnrollment
 from app.models.exam import Exam, ExamEvent, UserExamFollow
 from app.models.gamification import Achievement, UserAchievement, XPTransaction
+from app.models.paper import Paper
 from app.models.question import Question, Tag
 from app.models.test import Test, TestAttempt, TestQuestion, TestSection
 from app.models.user import Profile, User
@@ -85,7 +86,10 @@ def clear_seed_data(db) -> None:
         db.query(TestSection).filter(TestSection.test_id == t.id).delete(synchronize_session=False)
         db.delete(t)
 
-    db.query(Question).filter(Question.source == SEED_SOURCE).delete(synchronize_session=False)
+    seed_paper_ids = [p.id for p in db.execute(select(Paper).where(Paper.label == SEED_SOURCE)).scalars().all()]
+    if seed_paper_ids:
+        db.query(Question).filter(Question.paper_id.in_(seed_paper_ids)).delete(synchronize_session=False)
+        db.query(Paper).filter(Paper.id.in_(seed_paper_ids)).delete(synchronize_session=False)
     db.query(Achievement).delete(synchronize_session=False)
 
     for exam in db.execute(select(Exam)).scalars().all():
@@ -170,6 +174,21 @@ def seed_questions(db, taxonomy: dict, admin_id: uuid.UUID) -> dict:
     questions_by_scope: dict = {}
     years = [2023, 2024, 2025]
 
+    # One Paper per (course, year-or-None) combo, created on demand and
+    # reused - practice questions (year=None) all share one "generic" paper
+    # per course, PYQ questions share one per (course, year). All carry
+    # label=SEED_SOURCE so clear_seed_data() can find and remove them.
+    papers_cache: dict[tuple[str, int | None], Paper] = {}
+
+    def get_paper(exam_name: str, year: int | None) -> Paper:
+        key = (exam_name, year)
+        if key not in papers_cache:
+            paper = Paper(exam_name=exam_name, year=year, label=SEED_SOURCE)
+            db.add(paper)
+            db.flush()
+            papers_cache[key] = paper
+        return papers_cache[key]
+
     for course_slug, data in taxonomy.items():
         course = data["course"]
         for subject_name, subject in data["subjects"].items():
@@ -203,8 +222,7 @@ def seed_questions(db, taxonomy: dict, admin_id: uuid.UUID) -> dict:
                         explanation=explanation,
                         difficulty=difficulty,
                         question_type=q_type,
-                        year=year,
-                        source=SEED_SOURCE,
+                        paper=get_paper(course.name, year),
                         status=ContentStatus.PUBLISHED,
                         created_by=admin_id,
                     )

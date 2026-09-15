@@ -52,9 +52,8 @@ def list_questions(
     subject_id: uuid.UUID | None = None,
     topic_id: uuid.UUID | None = None,
     subtopic_id: uuid.UUID | None = None,
-    exam_id: uuid.UUID | None = None,
-    year: int | None = None,
-    source: str | None = None,
+    paper_id: uuid.UUID | None = None,
+    no_paper: bool = Query(False, description="Only questions with no paper tag - for finding ones to clean up"),
     language: str | None = None,
     difficulty: str | None = None,
     question_type: str | None = None,
@@ -76,12 +75,10 @@ def list_questions(
         q = q.where(Question.topic_id == topic_id)
     if subtopic_id:
         q = q.where(Question.subtopic_id == subtopic_id)
-    if exam_id:
-        q = q.where(Question.exam_id == exam_id)
-    if year:
-        q = q.where(Question.year == year)
-    if source:
-        q = q.where(Question.source == source)
+    if paper_id:
+        q = q.where(Question.paper_id == paper_id)
+    if no_paper:
+        q = q.where(Question.paper_id.is_(None))
     if language:
         q = q.where(Question.language == language)
     if difficulty:
@@ -102,27 +99,6 @@ def list_questions(
         q.order_by(Question.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     ).scalars().all()
     return Page.build(items, total, page, page_size)
-
-
-@router.get("/papers")
-def list_papers(admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
-    """Distinct (exam, year, source) groups among tagged questions - powers
-    the 'load questions from a PYQ paper' picker in the test builder, and the
-    paper filter in the questions list. A question only counts as belonging
-    to a paper once exam + year + source are ALL set."""
-    from app.models.exam import Exam
-
-    rows = db.execute(
-        select(Question.exam_id, Exam.name, Question.year, Question.source, Question.language, func.count(Question.id))
-        .join(Exam, Exam.id == Question.exam_id)
-        .where(Question.exam_id.isnot(None), Question.year.isnot(None), Question.source.isnot(None))
-        .group_by(Question.exam_id, Exam.name, Question.year, Question.source, Question.language)
-        .order_by(Question.year.desc(), Exam.name)
-    ).all()
-    return [
-        {"exam_id": r[0], "exam_name": r[1], "year": r[2], "source": r[3], "language": r[4], "question_count": r[5]}
-        for r in rows
-    ]
 
 
 @router.get("/{question_id}", response_model=QuestionAdminOut)

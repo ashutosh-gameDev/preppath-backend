@@ -13,18 +13,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.course import Course, Subject, Subtopic, Topic
+from app.models.paper import Paper
 from app.schemas.question import BulkImportDefaults, BulkImportRowError, QuestionCreate
 
-# course/subject are only "always required" when nothing was picked on the
-# Upload Paper screen (see BulkImportDefaults) - validate_rows relaxes these
-# per-call once defaults cover them, so a paper's file can skip the columns
-# entirely. option_a-d are only required when the row's format is mcq (the
-# default) - a fill_blank row needs just question + correct_answer.
+# course/subject/paper are only "always required" when nothing was picked on
+# the Upload Paper screen (see BulkImportDefaults) - validate_rows relaxes
+# these per-call once defaults cover them, so a paper's file can skip the
+# columns entirely. option_a-d are only required when the row's format is
+# mcq (the default) - a fill_blank row needs just question + correct_answer.
 REQUIRED_COLUMNS = ["question", "correct_answer"]
 MCQ_REQUIRED_COLUMNS = ["option_a", "option_b", "option_c", "option_d"]
 FORMAT_VALUES = {"mcq", "fill_blank"}
-# course/subject are handled specially in validate_rows (row column OR
-# BulkImportDefaults, not a flat required list) - listed here only so the
+# course/subject/paper are handled specially in validate_rows (row column(s)
+# OR BulkImportDefaults, not a flat required list) - listed here only so the
 # frontend's "what columns are optional" copy/template stays accurate.
 OPTIONAL_COLUMNS = [
     "course", "subject", "explanation", "topic", "subtopic", "exam", "year", "difficulty",
@@ -63,7 +64,7 @@ def _lookup_cache(
     db: Session,
 ) -> tuple[
     dict[str, Course], dict[tuple[uuid.UUID, str], Subject], dict[tuple[uuid.UUID, str], Topic],
-    dict[tuple[uuid.UUID, str], Subtopic],
+    dict[tuple[uuid.UUID, str], Subtopic], dict[tuple[str, int | None, str | None], Paper],
 ]:
     courses = {c.name.strip().lower(): c for c in db.execute(select(Course)).scalars().all()}
     subjects = {}
@@ -75,14 +76,17 @@ def _lookup_cache(
     subtopics = {}
     for st in db.execute(select(Subtopic)).scalars().all():
         subtopics[(st.topic_id, st.name.strip().lower())] = st
-    return courses, subjects, topics, subtopics
+    papers = {}
+    for p in db.execute(select(Paper)).scalars().all():
+        papers[(p.exam_name.strip().lower(), p.year, (p.label or "").strip().lower() or None)] = p
+    return courses, subjects, topics, subtopics, papers
 
 
 def validate_rows(
     db: Session, rows: list[dict], defaults: BulkImportDefaults | None = None
 ) -> tuple[list[QuestionCreate], list[BulkImportRowError]]:
     defaults = defaults or BulkImportDefaults()
-    courses, subjects, topics, subtopics = _lookup_cache(db)
+    courses, subjects, topics, subtopics, papers = _lookup_cache(db)
     valid: list[QuestionCreate] = []
     errors: list[BulkImportRowError] = []
 
@@ -147,14 +151,39 @@ def validate_rows(
             # leave it unset rather than cross-wiring an unrelated chapter.
             subtopic = candidate if candidate and candidate.topic_id == topic.id else None
 
+        # paper: the row's own exam/year/source columns win when present and
+        # must match an EXISTING paper (same "no silent creation from a typo"
+        # rule as topic/subtopic above - unlike those, this one falls back to
+        # a paper-level default since every question requires one).
+        paper_id: uuid.UUID | None = None
+        exam_raw = str(row.get("exam", "")).strip()
+        year_raw = str(row.get("year", "")).strip()
+        source_raw = str(row.get("source", "")).strip()
+        if exam_raw:
+            try:
+                paper_year = int(float(year_raw)) if year_raw else None
+            except ValueError:
+                paper_year = None
+            paper = papers.get((exam_raw.lower(), paper_year, source_raw.lower() or None))
+            if paper is None:
+                row_errors.append(
+                    f"Unknown paper for exam '{exam_raw}'"
+                    + (f", year {paper_year}" if paper_year else "")
+                    + (f", '{source_raw}'" if source_raw else "")
+                    + " - create it first from the Questions page or Upload Paper screen"
+                )
+            else:
+                paper_id = paper.id
+        elif defaults.paper_id:
+            paper_id = defaults.paper_id
+        else:
+            row_errors.append("Missing paper - pick one on the Upload Paper screen or add an 'exam' column")
+
         if row_errors:
             errors.append(BulkImportRowError(row_number=i, errors=row_errors, raw=row))
             continue
 
         try:
-            year_raw = str(row.get("year", "")).strip()
-            exam_raw = str(row.get("exam", "")).strip()
-            source_raw = str(row.get("source", "")).strip()
             language_raw = str(row.get("language", "")).strip()
             tags_raw = str(row.get("tags", "")).strip()
             common = dict(
@@ -162,9 +191,7 @@ def validate_rows(
                 explanation=str(row.get("explanation") or "").strip() or None,
                 difficulty=(str(row.get("difficulty") or "").strip().lower() or defaults.difficulty or "medium"),
                 question_type=(str(row.get("type") or "").strip().lower() or defaults.question_type or "practice"),
-                exam_id=_resolve_exam_id(db, exam_raw) if exam_raw else defaults.exam_id,
-                year=int(float(year_raw)) if year_raw else defaults.year,
-                source=source_raw or defaults.source,
+                paper_id=paper_id,
                 language=language_raw or defaults.language,
                 tags=[t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else [],
                 course_id=course.id,
@@ -193,10 +220,3 @@ def validate_rows(
             errors.append(BulkImportRowError(row_number=i, errors=[str(e)], raw=row))
 
     return valid, errors
-
-
-def _resolve_exam_id(db: Session, name: str) -> uuid.UUID | None:
-    from app.models.exam import Exam
-
-    exam = db.execute(select(Exam).where(Exam.name.ilike(name.strip()))).scalar_one_or_none()
-    return exam.id if exam else None

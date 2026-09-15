@@ -36,8 +36,6 @@ class QuestionBase(ORMModel):
     explanation: str | None = None
     difficulty: str = "medium"
     question_type: str = "practice"
-    year: int | None = None
-    source: str | None = None
     # Free text, not an enum, so a new language never needs a migration -
     # same reasoning as question_type. e.g. "English", "Hindi".
     language: str | None = None
@@ -113,7 +111,14 @@ class QuestionCreate(QuestionBase):
     subject_id: uuid.UUID
     topic_id: uuid.UUID | None = None
     subtopic_id: uuid.UUID | None = None
-    exam_id: uuid.UUID | None = None
+    # Required (not Optional) - every question added from here on must be
+    # tagged to a paper so it can be found/bulk-edited by paper later. Set
+    # from the single Paper picker in the admin form/Upload Paper screen,
+    # never by inline-creating an Exam (see models/paper.py). Existing rows
+    # from before this requirement can still have paper_id NULL - clean them
+    # up via the "Move to chapter/topic"-style bulk action instead of a
+    # forced migration.
+    paper_id: uuid.UUID
     status: str = "draft"
 
 
@@ -134,15 +139,13 @@ class QuestionUpdate(ORMModel):
     explanation: str | None = None
     difficulty: str | None = None
     question_type: str | None = None
-    year: int | None = None
-    source: str | None = None
     language: str | None = None
     tags: list[str] | None = None
     course_id: uuid.UUID | None = None
     subject_id: uuid.UUID | None = None
     topic_id: uuid.UUID | None = None
     subtopic_id: uuid.UUID | None = None
-    exam_id: uuid.UUID | None = None
+    paper_id: uuid.UUID | None = None
     status: str | None = None
 
 
@@ -157,7 +160,7 @@ class QuestionAdminOut(QuestionBase):
     subject_id: uuid.UUID
     topic_id: uuid.UUID | None
     subtopic_id: uuid.UUID | None
-    exam_id: uuid.UUID | None
+    paper_id: uuid.UUID | None
     status: str
     created_at: datetime
     updated_at: datetime
@@ -191,7 +194,11 @@ class QuestionAttemptOut(ORMModel):
     subtopic_id: uuid.UUID | None = None
     # Paper tag (exam + year + source + language), shown as a badge in
     # flashcards/PYQ browsing when the question was tagged to a specific
-    # paper - all null for ordinary practice questions.
+    # paper - all null for ordinary practice questions. year/source/
+    # exam_name are read off the linked Paper via Question's properties of
+    # the same name (see models/question.py) - kept under these names so
+    # nothing downstream needed to change when paper tagging moved off Exam.
+    paper_id: uuid.UUID | None = None
     year: int | None = None
     source: str | None = None
     language: str | None = None
@@ -232,17 +239,18 @@ class BulkImportPreview(ORMModel):
 
 
 class BulkImportDefaults(ORMModel):
-    """Paper-level fields filled in once on the 'Upload Paper' screen and
-    applied to every row that doesn't specify its own value - lets a bulk
-    file skip course/subject/exam/year/source columns entirely when they're
-    the same for the whole paper (the normal case)."""
+    """Fields filled in once on the 'Upload Paper' screen and applied to
+    every row that doesn't specify its own value - lets a bulk file skip
+    course/subject/exam/year/source columns entirely when they're the same
+    for the whole paper (the normal case). `paper_id` covers exam/year/
+    source together (see Paper) - a row's own `exam`/`year`/`source` text
+    columns, if present, resolve-or-create a paper instead of using this
+    default; see bulk_import_service.validate_rows."""
     course_id: uuid.UUID | None = None
     subject_id: uuid.UUID | None = None
     topic_id: uuid.UUID | None = None
     subtopic_id: uuid.UUID | None = None
-    exam_id: uuid.UUID | None = None
-    year: int | None = None
-    source: str | None = None
+    paper_id: uuid.UUID | None = None
     language: str | None = None
     difficulty: str | None = None
     question_type: str | None = None

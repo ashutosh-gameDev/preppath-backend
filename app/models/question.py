@@ -77,8 +77,13 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     subtopic_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("subtopics.id", ondelete="SET NULL"), nullable=True
     )
-    exam_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("exams.id", ondelete="SET NULL"), nullable=True
+    # Which PYQ/exam paper this question is tagged to (see models/paper.py -
+    # deliberately NOT a foreign key to Exam, the followable/notification
+    # entity). Nullable at the DB level so existing untagged rows aren't
+    # forced through a backfill, but required by QuestionCreate going
+    # forward - see that schema's docstring.
+    paper_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("papers.id", ondelete="SET NULL"), nullable=True
     )
 
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -110,11 +115,9 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
 
     difficulty: Mapped[str] = mapped_column(String(10), default=Difficulty.MEDIUM, nullable=False)
     question_type: Mapped[str] = mapped_column(String(20), default=QuestionType.PRACTICE, nullable=False, index=True)
-    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    source: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # Paper-level tag, same family as year/source (e.g. "English", "Hindi") -
-    # free text rather than an enum so a new language never needs a
+    # Free text rather than an enum so a new language never needs a
     # migration, matching the extensibility approach used for question_type.
+    # Independent of `paper_id` - a question's own language, not the paper's.
     language: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=ContentStatus.DRAFT, nullable=False, index=True)
 
@@ -128,12 +131,23 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     subject = relationship("Subject")
     topic = relationship("Topic")
     subtopic = relationship("Subtopic")
-    exam = relationship("Exam")
+    paper = relationship("Paper")
+
+    # Read-only pass-throughs to the linked Paper, kept under their old
+    # names (`year`/`source`/`exam_name` were plain columns reading straight
+    # off Exam before the Paper split) so QuestionAttemptOut/QuestionReviewOut
+    # and every consumer of them (student flashcards/PYQ review) keep working
+    # unchanged - Pydantic's from_attributes reads a property exactly like a
+    # column. Storage/tagging now happens through `paper_id`/`paper` only;
+    # these are display convenience, not settable.
+    @property
+    def year(self) -> int | None:
+        return self.paper.year if self.paper else None
+
+    @property
+    def source(self) -> str | None:
+        return self.paper.label if self.paper else None
 
     @property
     def exam_name(self) -> str | None:
-        """Convenience for schemas (e.g. QuestionAttemptOut) that want to show
-        the paper tag (exam + year + source) without the caller needing its
-        own exam lookup - Pydantic's from_attributes picks up plain properties
-        the same way it picks up columns."""
-        return self.exam.name if self.exam else None
+        return self.paper.exam_name if self.paper else None
