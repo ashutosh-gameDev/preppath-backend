@@ -17,6 +17,11 @@ class Course(Base, UUIDPKMixin, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     icon: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Bumped by admins in the CRM whenever a course's questions/papers get a
+    # meaningful update - lets students who've downloaded a paper for
+    # offline attempts (see student-web lib/paper-cache.ts) know their local
+    # copy may be stale, without any automatic re-sync magic.
+    content_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     subjects: Mapped[list["Subject"]] = relationship(
         back_populates="course", cascade="all, delete-orphan", order_by="Subject.order_index"

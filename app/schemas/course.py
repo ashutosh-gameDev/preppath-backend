@@ -104,11 +104,13 @@ class CourseUpdate(ORMModel):
     description: str | None = None
     icon: str | None = None
     is_published: bool | None = None
+    content_version: int | None = None
 
 
 class CourseOut(CourseBase):
     id: uuid.UUID
     slug: str
+    content_version: int = 1
 
 
 class CourseTreeOut(CourseOut):

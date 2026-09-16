@@ -22,12 +22,16 @@ router = APIRouter(prefix="/pyq", tags=["pyq"])
 
 
 @router.get("/exams", response_model=list[ExamOut])
-def list_pyq_exams(db: Session = Depends(get_db)):
-    exam_ids = db.execute(
-        select(distinct(Test.exam_id)).where(
-            Test.test_type == TestType.PYQ, Test.status == ContentStatus.PUBLISHED, Test.exam_id.is_not(None)
-        )
-    ).scalars().all()
+def list_pyq_exams(course_id: uuid.UUID | None = None, db: Session = Depends(get_db)):
+    """`course_id` scopes to PYQ papers tagged to that course (e.g. when
+    drilling in from a specific course's hub) - omitted, this lists every
+    exam with a published PYQ paper platform-wide."""
+    q = select(distinct(Test.exam_id)).where(
+        Test.test_type == TestType.PYQ, Test.status == ContentStatus.PUBLISHED, Test.exam_id.is_not(None)
+    )
+    if course_id:
+        q = q.where(Test.course_id == course_id)
+    exam_ids = db.execute(q).scalars().all()
     if not exam_ids:
         return []
     return db.execute(select(Exam).where(Exam.id.in_(exam_ids), Exam.is_published.is_(True)).order_by(Exam.name)).scalars().all()

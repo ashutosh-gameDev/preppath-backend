@@ -101,6 +101,11 @@ class TestListItemOut(ORMModel):
     is_live: bool = False
     live_starts_at: datetime | None = None
     live_ends_at: datetime | None = None
+    # The paper's course's content_version at read time - the student-web
+    # paper cache (lib/paper-cache.ts) stores this alongside a downloaded
+    # attempt and compares it here on reopen so admins bumping a course's
+    # version in the CRM can nudge students holding a stale offline copy.
+    course_content_version: int | None = None
     duration_minutes: int
     total_questions: int
     total_marks: float

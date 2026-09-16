@@ -49,6 +49,7 @@ def _to_list_item(db: Session, test: Test, user_id: uuid.UUID) -> TestListItemOu
         is_live=test.is_live,
         live_starts_at=test.live_starts_at,
         live_ends_at=test.live_ends_at,
+        course_content_version=test.course.content_version if test.course else None,
         duration_minutes=test.duration_minutes,
         total_questions=test.total_questions,
         total_marks=test.total_marks,
