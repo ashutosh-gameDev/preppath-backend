@@ -27,6 +27,10 @@ def update_my_user(
     profile = db.get(Profile, user.id)
     if profile and payload.daily_goal_questions is not None:
         profile.daily_goal_questions = payload.daily_goal_questions
+    if profile and payload.date_of_birth is not None:
+        profile.date_of_birth = payload.date_of_birth
+    if profile and payload.qualification is not None:
+        profile.qualification = payload.qualification
 
     db.flush()
     user.profile = profile

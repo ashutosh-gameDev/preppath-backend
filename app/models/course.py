@@ -87,7 +87,9 @@ class TopicProgress(Base, UUIDPKMixin):
     """A student's mark-complete/incomplete state on a syllabus topic (the
     video lecture, not question practice - that progress is already derived
     from `attempts`). One row per (user, topic); upserted from a single
-    'mark complete' toggle in the UI."""
+    'mark complete' toggle in the UI. `needs_revision` is independent of
+    `is_completed` - a topic can be finished AND flagged to revisit before
+    the exam, so the two aren't mutually exclusive states."""
     __tablename__ = "topic_progress"
     __table_args__ = (UniqueConstraint("user_id", "topic_id", name="uq_topic_progress_user_topic"),)
 
@@ -99,3 +101,4 @@ class TopicProgress(Base, UUIDPKMixin):
     )
     is_completed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    needs_revision: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

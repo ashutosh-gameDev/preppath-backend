@@ -16,9 +16,15 @@ from app.models.course import Course
 from app.models.enrollment import CourseEnrollment
 from app.models.enums import ContentStatus
 from app.models.question import Question
-from app.models.user import User
+from app.models.user import Profile, User
 from app.schemas.common import Message
 from app.schemas.enrollment import EnrolledCourseOut, EnrollRequest
+from app.services.premium_service import is_premium
+
+# Free tier: one course at a time. Premium (any plan): unlimited courses -
+# see services/premium_service.is_premium. Not a separate numeric tier, just
+# gating on the existing premium_until flag.
+FREE_COURSE_LIMIT = 1
 
 router = APIRouter(prefix="/enrollments", tags=["enrollments"])
 
@@ -75,6 +81,16 @@ def enroll(payload: EnrollRequest, user: User = Depends(get_current_user), db: S
         select(CourseEnrollment).where(CourseEnrollment.user_id == user.id, CourseEnrollment.course_id == payload.course_id)
     ).scalar_one_or_none()
     if existing is None:
+        profile = db.get(Profile, user.id)
+        if not (profile and is_premium(profile)):
+            current_count = db.execute(
+                select(func.count(CourseEnrollment.id)).where(CourseEnrollment.user_id == user.id)
+            ).scalar_one()
+            if current_count >= FREE_COURSE_LIMIT:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Free plan allows only 1 course at a time - upgrade to Premium to select more.",
+                )
         db.add(CourseEnrollment(user_id=user.id, course_id=payload.course_id))
         db.flush()
     return Message(detail=f"Enrolled in {course.name}")

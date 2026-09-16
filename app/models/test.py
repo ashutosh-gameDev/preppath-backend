@@ -33,6 +33,16 @@ class Test(Base, UUIDPKMixin, TimestampMixin):
     pyq_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     pyq_paper_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Optional scheduled window - when set (is_live=True), students can only
+    # start a new attempt between live_starts_at and live_ends_at (see
+    # api/v1/endpoints/tests.py start_test), so everyone races the same
+    # clock instead of starting whenever they like. Each individual's own
+    # `duration_minutes` still caps how long they get once started; the
+    # student-web attempt timer submits at whichever comes first.
+    is_live: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    live_starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    live_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
     total_questions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_marks: Mapped[float] = mapped_column(Float, nullable=False, default=0)

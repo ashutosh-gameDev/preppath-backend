@@ -55,12 +55,14 @@ class TopicOut(TopicBase):
 
 
 class TopicProgressIn(ORMModel):
-    is_completed: bool = True
+    is_completed: bool | None = None
+    needs_revision: bool | None = None
 
 
 class TopicProgressOut(ORMModel):
     topic_id: uuid.UUID
     is_completed: bool
+    needs_revision: bool = False
 
 
 class SubjectBase(ORMModel):

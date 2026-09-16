@@ -36,6 +36,12 @@ class TestCreate(ORMModel):
     exam_id: uuid.UUID | None = None
     pyq_year: int | None = None
     pyq_paper_label: str | None = None
+    # Scheduled window - when is_live is set, students can only start a new
+    # attempt between live_starts_at and live_ends_at. Leave unset for a
+    # normal, always-available test.
+    is_live: bool = False
+    live_starts_at: datetime | None = None
+    live_ends_at: datetime | None = None
     duration_minutes: int = 60
     negative_marking: float = 0
     difficulty: str | None = None
@@ -54,6 +60,9 @@ class TestUpdate(ORMModel):
     exam_id: uuid.UUID | None = None
     pyq_year: int | None = None
     pyq_paper_label: str | None = None
+    is_live: bool | None = None
+    live_starts_at: datetime | None = None
+    live_ends_at: datetime | None = None
     duration_minutes: int | None = None
     negative_marking: float | None = None
     difficulty: str | None = None
@@ -89,6 +98,9 @@ class TestListItemOut(ORMModel):
     exam_id: uuid.UUID | None
     pyq_year: int | None
     pyq_paper_label: str | None
+    is_live: bool = False
+    live_starts_at: datetime | None = None
+    live_ends_at: datetime | None = None
     duration_minutes: int
     total_questions: int
     total_marks: float

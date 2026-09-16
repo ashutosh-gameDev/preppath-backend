@@ -46,6 +46,9 @@ def _to_list_item(db: Session, test: Test, user_id: uuid.UUID) -> TestListItemOu
         exam_id=test.exam_id,
         pyq_year=test.pyq_year,
         pyq_paper_label=test.pyq_paper_label,
+        is_live=test.is_live,
+        live_starts_at=test.live_starts_at,
+        live_ends_at=test.live_ends_at,
         duration_minutes=test.duration_minutes,
         total_questions=test.total_questions,
         total_marks=test.total_marks,
@@ -89,6 +92,22 @@ def start_test(test_id: uuid.UUID, user: User = Depends(get_current_user), db: S
     test = db.get(Test, test_id)
     if test is None or test.status != ContentStatus.PUBLISHED:
         raise HTTPException(status_code=404, detail="Test not found")
+
+    if test.is_live:
+        # The window only gates STARTING a fresh attempt - someone already
+        # mid-attempt (e.g. window closing while they're still answering)
+        # must still be able to resume and submit.
+        has_in_progress = db.execute(
+            select(TestAttempt.id).where(
+                TestAttempt.test_id == test.id, TestAttempt.user_id == user.id, TestAttempt.status == TestAttemptStatus.IN_PROGRESS
+            )
+        ).first()
+        if not has_in_progress:
+            now = datetime.now(timezone.utc)
+            if test.live_starts_at and now < test.live_starts_at:
+                raise HTTPException(status_code=403, detail="This live test hasn't started yet.")
+            if test.live_ends_at and now > test.live_ends_at:
+                raise HTTPException(status_code=403, detail="This live test has ended.")
 
     attempt = test_service.start_or_resume_attempt(db, test, user.id)
 

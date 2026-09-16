@@ -45,18 +45,23 @@ def get_course_progress(course_id: uuid.UUID, user: User = Depends(get_current_u
     the tree endpoint stays public/cacheable and per-user state doesn't leak
     into it)."""
     rows = db.execute(
-        select(TopicProgress.topic_id, TopicProgress.is_completed)
+        select(TopicProgress.topic_id, TopicProgress.is_completed, TopicProgress.needs_revision)
         .join(Topic, Topic.id == TopicProgress.topic_id)
         .join(Subject, Subject.id == Topic.subject_id)
         .where(TopicProgress.user_id == user.id, Subject.course_id == course_id)
     ).all()
-    return [TopicProgressOut(topic_id=r[0], is_completed=r[1]) for r in rows]
+    return [TopicProgressOut(topic_id=r[0], is_completed=r[1], needs_revision=r[2]) for r in rows]
 
 
 @router.put("/topics/{topic_id}/progress", response_model=Message)
 def set_topic_progress(
     topic_id: uuid.UUID, payload: TopicProgressIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
+    """Upserts the caller's progress row for this topic. Either field may be
+    sent alone (e.g. the Syllabus page's revision toggle only sends
+    needs_revision, leaving is_completed untouched) - unset fields keep their
+    existing value, or default to a fresh row's normal complete-toggle
+    semantics."""
     topic = db.get(Topic, topic_id)
     if topic is None:
         raise HTTPException(status_code=404, detail="Topic not found")
@@ -64,16 +69,21 @@ def set_topic_progress(
         select(TopicProgress).where(TopicProgress.user_id == user.id, TopicProgress.topic_id == topic_id)
     ).scalar_one_or_none()
     if existing is None:
+        is_completed = payload.is_completed if payload.is_completed is not None else True
         db.add(
             TopicProgress(
                 user_id=user.id,
                 topic_id=topic_id,
-                is_completed=payload.is_completed,
-                completed_at=datetime.now(timezone.utc) if payload.is_completed else None,
+                is_completed=is_completed,
+                completed_at=datetime.now(timezone.utc) if is_completed else None,
+                needs_revision=payload.needs_revision or False,
             )
         )
     else:
-        existing.is_completed = payload.is_completed
-        existing.completed_at = datetime.now(timezone.utc) if payload.is_completed else None
+        if payload.is_completed is not None:
+            existing.is_completed = payload.is_completed
+            existing.completed_at = datetime.now(timezone.utc) if payload.is_completed else None
+        if payload.needs_revision is not None:
+            existing.needs_revision = payload.needs_revision
     db.flush()
     return Message(detail="Progress updated")

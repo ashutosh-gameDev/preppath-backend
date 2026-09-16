@@ -62,5 +62,11 @@ class Profile(Base, TimestampMixin):
     # services/premium_service.py whenever a Payment is confirmed paid;
     # stacks on top of any remaining time rather than overwriting it.
     premium_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Optional, set once from the Jobs notification tab (or the profile) and
+    # remembered - used to filter job postings to ones the student is
+    # actually eligible for. Free text for qualification (e.g. "Graduate"),
+    # same reasoning as other free-text taxonomy fields in this codebase.
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    qualification: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="profile")
