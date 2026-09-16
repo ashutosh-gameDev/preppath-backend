@@ -132,6 +132,7 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     topic = relationship("Topic")
     subtopic = relationship("Subtopic")
     pyq_paper = relationship("PYQPaper")
+    created_by_user = relationship("User")
 
     # Read-only pass-throughs to the linked PYQPaper, kept under their old
     # names (`year`/`source`/`exam_name` were plain columns/a property
@@ -152,3 +153,15 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     @property
     def exam_name(self) -> str | None:
         return self.pyq_paper.exam_name if self.pyq_paper else None
+
+    @property
+    def uploader_label(self) -> str | None:
+        """Who added this question, for the admin list - a content_editor
+        (intern) account's human-facing username if it has one (see
+        User.username), else the account's real name, else its email. None
+        if created_by is unset (a pre-existing row from before this was
+        tracked) or the user account was since deleted (ON DELETE SET NULL)."""
+        u = self.created_by_user
+        if not u:
+            return None
+        return u.username or u.full_name or u.email

@@ -164,6 +164,9 @@ class QuestionAdminOut(QuestionBase):
     status: str
     created_at: datetime
     updated_at: datetime
+    # Who added this question - see Question.uploader_label. None for rows
+    # from before this was tracked, or whose uploader account was deleted.
+    uploader_label: str | None = None
 
 
 class QuestionAttemptOut(ORMModel):
