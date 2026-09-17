@@ -12,12 +12,10 @@ from app.models.enums import NotificationType
 class Notification(Base, UUIDPKMixin):
     """
     Persisted, per-user notifications (achievement unlocked, system message,
-    leaderboard movement...). Exam-event reminders for followed exams are
-    computed on the fly from `exam_events` + `user_exam_follows` rather than
-    fanned out into rows here (cheap to compute, always up to date - see
-    `services/notification_service.py`), but this table is exactly the shape
-    an email/push dispatcher would consume later (user_id, title, message,
-    type, ref).
+    leaderboard movement...). Job vacancy alerts are a separate feed (see
+    models/job_posting.py) rather than rows here. This table is exactly the
+    shape an email/push dispatcher would consume later (user_id, title,
+    message, type, ref).
     """
     __tablename__ = "notifications"
 

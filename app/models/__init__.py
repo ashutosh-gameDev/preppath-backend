@@ -7,7 +7,6 @@ from app.models.base import Base  # noqa: F401
 from app.models.user import User, Profile  # noqa: F401
 from app.models.course import Course, Subject, Topic, TopicProgress  # noqa: F401
 from app.models.question import Question, Tag, question_tags  # noqa: F401
-from app.models.exam import Exam, ExamEvent, UserExamFollow  # noqa: F401
 from app.models.pyq_paper import PYQPaper  # noqa: F401
 from app.models.enrollment import CourseEnrollment  # noqa: F401
 from app.models.payment import Payment  # noqa: F401
@@ -29,9 +28,6 @@ __all__ = [
     "Question",
     "Tag",
     "question_tags",
-    "Exam",
-    "ExamEvent",
-    "UserExamFollow",
     "PYQPaper",
     "CourseEnrollment",
     "Payment",

@@ -1,6 +1,6 @@
 """
 Mock test + PYQ paper taking (both are `Test` rows - see models/test.py).
-Browsing the PYQ exam/year/paper hierarchy lives in `pyq.py`; this module
+Browsing the PYQ course/year/paper hierarchy lives in `pyq.py`; this module
 handles listing, starting, resuming, submitting and reviewing any Test.
 """
 import uuid
@@ -43,7 +43,6 @@ def _to_list_item(db: Session, test: Test, user_id: uuid.UUID) -> TestListItemOu
         title=test.title,
         test_type=test.test_type,
         course_id=test.course_id,
-        exam_id=test.exam_id,
         pyq_year=test.pyq_year,
         pyq_paper_label=test.pyq_paper_label,
         is_live=test.is_live,
@@ -64,7 +63,6 @@ def _to_list_item(db: Session, test: Test, user_id: uuid.UUID) -> TestListItemOu
 @router.get("", response_model=list[TestListItemOut])
 def list_tests(
     course_id: uuid.UUID | None = None,
-    exam_id: uuid.UUID | None = None,
     test_type: str = "mock",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -72,8 +70,6 @@ def list_tests(
     q = select(Test).where(Test.status == ContentStatus.PUBLISHED, Test.test_type == test_type)
     if course_id:
         q = q.where(Test.course_id == course_id)
-    if exam_id:
-        q = q.where(Test.exam_id == exam_id)
     tests = db.execute(q.order_by(Test.created_at.desc())).scalars().all()
     return [_to_list_item(db, t, user.id) for t in tests]
 

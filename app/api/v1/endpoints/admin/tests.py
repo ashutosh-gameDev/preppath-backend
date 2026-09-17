@@ -35,7 +35,6 @@ def _to_detail(db: Session, test: Test) -> TestDetailOut:
         title=test.title,
         test_type=test.test_type,
         course_id=test.course_id,
-        exam_id=test.exam_id,
         pyq_year=test.pyq_year,
         pyq_paper_label=test.pyq_paper_label,
         is_live=test.is_live,
@@ -104,7 +103,7 @@ def delete_test(test_id: uuid.UUID, admin: User = Depends(require_content_access
 def bulk_update_tests(
     payload: BulkTestUpdateRequest, admin: User = Depends(require_content_access), db: Session = Depends(get_db)
 ):
-    """Apply one patch (publish/unpublish/archive, or fix exam/year/course
+    """Apply one patch (publish/unpublish/archive, or fix year/course
     tagging) to every test in `test_ids` at once - the Tests/PYQ admin
     list's bulk-select action bar."""
     data = payload.patch.model_dump(exclude_unset=True)

@@ -10,7 +10,7 @@ class AdminDashboardStats(ORMModel):
     total_questions: int
     total_tests: int
     total_courses: int
-    total_exams: int
+    total_pyq_papers: int
     questions_attempted_today: int
     tests_completed_today: int
 
@@ -32,3 +32,17 @@ class AdminDashboardCharts(ORMModel):
     questions_attempted: list[DailySeriesPoint]
     popular_courses: list[PopularItem]
     popular_tests: list[PopularItem]
+
+
+class PapersOverviewItem(ORMModel):
+    """One row of the admin dashboard's content-overview table - what PYQ
+    papers exist, which course/category each belongs to, how many questions
+    are in it, and who uploaded them (see admin/dashboard.py papers_overview)."""
+    id: uuid.UUID
+    exam_name: str
+    year: int | None
+    label: str | None
+    course_id: uuid.UUID | None
+    course_name: str | None
+    question_count: int
+    uploaders: list[str]

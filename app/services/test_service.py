@@ -29,7 +29,6 @@ def build_test(db: Session, payload: TestCreate, created_by: uuid.UUID) -> Test:
         title=payload.title,
         test_type=payload.test_type,
         course_id=payload.course_id,
-        exam_id=payload.exam_id,
         pyq_year=payload.pyq_year,
         pyq_paper_label=payload.pyq_paper_label,
         is_live=payload.is_live,

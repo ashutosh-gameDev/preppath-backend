@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import UserRole
+from app.models.enums import UserRole, UserTier
 
 
 class User(Base, TimestampMixin):
@@ -58,10 +58,14 @@ class Profile(Base, TimestampMixin):
     questions_correct: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     tests_completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pyqs_completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    # Premium (ad-free) access expiry - null/past = free tier. Extended by
-    # services/premium_service.py whenever a Payment is confirmed paid;
-    # stacks on top of any remaining time rather than overwriting it.
-    premium_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Subscription tier - NORMAL (free), PRO, or PREMIUM (see enums.UserTier).
+    # `tier_expires_at` is when the CURRENT paid tier lapses back to NORMAL;
+    # irrelevant while tier is NORMAL. Settable two ways: automatically by
+    # services/premium_service.py when a Payment is confirmed paid (stacks
+    # on top of any remaining time rather than overwriting it), or manually
+    # by a super admin from the Users admin page (comps, support overrides).
+    tier: Mapped[str] = mapped_column(String(20), default=UserTier.NORMAL, nullable=False)
+    tier_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Optional, set once from the Jobs notification tab (or the profile) and
     # remembered - used to filter job postings to ones the student is
     # actually eligible for. Free text for qualification (e.g. "Graduate"),

@@ -8,11 +8,13 @@ from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.attempt import Attempt
 from app.models.course import Course
-from app.models.exam import Exam
+from app.models.pyq_paper import PYQPaper
 from app.models.question import Question
 from app.models.test import Test, TestAttempt
 from app.models.user import User
-from app.schemas.admin import AdminDashboardCharts, AdminDashboardStats, DailySeriesPoint, PopularItem
+from app.schemas.admin import AdminDashboardCharts, AdminDashboardStats, DailySeriesPoint, PapersOverviewItem, PopularItem
+from app.schemas.statistics import LeaderboardOut
+from app.services import leaderboard_service
 
 router = APIRouter(prefix="/admin/dashboard", tags=["admin:dashboard"])
 
@@ -28,7 +30,7 @@ def get_stats(admin: User = Depends(require_admin), db: Session = Depends(get_db
     total_questions = db.execute(select(func.count(Question.id))).scalar_one()
     total_tests = db.execute(select(func.count(Test.id))).scalar_one()
     total_courses = db.execute(select(func.count(Course.id))).scalar_one()
-    total_exams = db.execute(select(func.count(Exam.id))).scalar_one()
+    total_pyq_papers = db.execute(select(func.count(PYQPaper.id))).scalar_one()
     questions_attempted_today = db.execute(
         select(func.count(Attempt.id)).where(Attempt.attempted_at >= today_start)
     ).scalar_one()
@@ -42,7 +44,7 @@ def get_stats(admin: User = Depends(require_admin), db: Session = Depends(get_db
         total_questions=total_questions,
         total_tests=total_tests,
         total_courses=total_courses,
-        total_exams=total_exams,
+        total_pyq_papers=total_pyq_papers,
         questions_attempted_today=questions_attempted_today,
         tests_completed_today=tests_completed_today,
     )
@@ -86,3 +88,65 @@ def get_charts(days: int = 30, admin: User = Depends(require_admin), db: Session
         popular_courses=[PopularItem(id=i, name=n, count=c) for i, n, c in popular_courses_rows],
         popular_tests=[PopularItem(id=i, name=n, count=c) for i, n, c in popular_tests_rows],
     )
+
+
+@router.get("/papers-overview", response_model=list[PapersOverviewItem])
+def papers_overview(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """What PYQ papers exist, their course/category, how many questions are
+    tagged to each, and who uploaded them - the content overview table on
+    the admin dashboard (point 11: 'what paper we have what categories paper
+    who uploaded and which questions in which')."""
+    papers = db.execute(select(PYQPaper).order_by(PYQPaper.exam_name, PYQPaper.year.desc())).scalars().all()
+    if not papers:
+        return []
+    paper_ids = [p.id for p in papers]
+
+    courses = {c.id: c.name for c in db.execute(select(Course)).scalars().all()}
+
+    counts = dict(
+        db.execute(
+            select(Question.pyq_paper_id, func.count(Question.id))
+            .where(Question.pyq_paper_id.in_(paper_ids))
+            .group_by(Question.pyq_paper_id)
+        ).all()
+    )
+
+    uploaders_by_paper: dict = {}
+    uploader_rows = db.execute(
+        select(Question.pyq_paper_id, User.username, User.full_name, User.email)
+        .join(User, User.id == Question.created_by)
+        .where(Question.pyq_paper_id.in_(paper_ids))
+        .distinct()
+    ).all()
+    for paper_id, username, full_name, email in uploader_rows:
+        label = username or full_name or email
+        uploaders_by_paper.setdefault(paper_id, set()).add(label)
+
+    return [
+        PapersOverviewItem(
+            id=p.id,
+            exam_name=p.exam_name,
+            year=p.year,
+            label=p.label,
+            course_id=p.course_id,
+            course_name=courses.get(p.course_id) if p.course_id else None,
+            question_count=counts.get(p.id, 0),
+            uploaders=sorted(uploaders_by_paper.get(p.id, set())),
+        )
+        for p in papers
+    ]
+
+
+@router.get("/leaderboard", response_model=LeaderboardOut)
+def dashboard_leaderboard(
+    scope: str = "global", limit: int = 10, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    """The same live leaderboard students see, surfaced on the admin
+    dashboard (point 9) - `current_user`/`current_user_entry` will just
+    reflect the calling admin's own (near-certainly absent) rank, which is
+    harmless here."""
+    if scope == "weekly":
+        return leaderboard_service.weekly_leaderboard(db, admin.id, limit)
+    if scope == "monthly":
+        return leaderboard_service.monthly_leaderboard(db, admin.id, limit)
+    return leaderboard_service.global_leaderboard(db, admin.id, limit)

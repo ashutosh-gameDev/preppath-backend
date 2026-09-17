@@ -15,7 +15,7 @@ Scoring is intentionally NOT "most questions attempted":
     correctness + difficulty + test performance (see `xp_service` /
     `settings_service` defaults) - so grinding wrong answers earns almost
     nothing.
-  * Exam rank uses average test percentage score, not attempt volume.
+  * Course rank uses average test percentage score, not attempt volume.
   * Subject rank uses accuracy, gated by a minimum answered count.
 All thresholds/weights are configurable via `platform_settings`.
 """
@@ -150,13 +150,13 @@ def monthly_leaderboard(db: Session, current_user_id: uuid.UUID, limit: int = 50
     return _period_xp_leaderboard(db, current_user_id, since, limit, "monthly", "Monthly Leaderboard")
 
 
-def exam_leaderboard(db: Session, exam_id: uuid.UUID, current_user_id: uuid.UUID, limit: int = 50) -> dict:
+def course_leaderboard(db: Session, course_id: uuid.UUID, current_user_id: uuid.UUID, limit: int = 50) -> dict:
     avg_pct = func.avg(100 * TestAttempt.score / func.nullif(Test.total_marks, 0)).label("avg_pct")
     q = (
         select(User, avg_pct, func.count(TestAttempt.id))
         .join(TestAttempt, TestAttempt.user_id == User.id)
         .join(Test, Test.id == TestAttempt.test_id)
-        .where(Test.exam_id == exam_id, TestAttempt.status == "submitted", User.is_active.is_(True))
+        .where(Test.course_id == course_id, TestAttempt.status == "submitted", User.is_active.is_(True))
         .group_by(User.id)
         .order_by(avg_pct.desc())
         .limit(limit)
@@ -169,8 +169,8 @@ def exam_leaderboard(db: Session, exam_id: uuid.UUID, current_user_id: uuid.UUID
     current_rank = next((e["rank"] for e in entries if e["is_current_user"]), None)
     current_entry = next((e for e in entries if e["is_current_user"]), None)
     return {
-        "scope": "exam",
-        "scope_label": "Exam Leaderboard",
+        "scope": "course",
+        "scope_label": "Course Leaderboard",
         "entries": entries,
         "current_user_rank": current_rank,
         "current_user_entry": current_entry,

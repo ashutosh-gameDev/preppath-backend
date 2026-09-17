@@ -15,7 +15,7 @@ class Test(Base, UUIDPKMixin, TimestampMixin):
     (`test_type` distinguishes them) rather than duplicating sections/
     questions/attempts machinery across two parallel schemas - a PYQ paper is
     structurally a test (duration, marks, negative marking, question list)
-    that happens to be tagged with the exam/year/shift it came from.
+    that happens to be tagged with the course/year/shift it came from.
     """
     __tablename__ = "tests"
 
@@ -23,13 +23,10 @@ class Test(Base, UUIDPKMixin, TimestampMixin):
     test_type: Mapped[str] = mapped_column(String(10), default=TestType.MOCK, nullable=False, index=True)
 
     course_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="SET NULL"), nullable=True
-    )
-    exam_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("exams.id", ondelete="SET NULL"), nullable=True, index=True
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    # PYQ-specific grouping: Exam -> year -> paper label (e.g. "Tier 1 Shift 1")
+    # PYQ-specific grouping: Course -> year -> paper label (e.g. "Tier 1 Shift 1")
     pyq_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     pyq_paper_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
@@ -62,7 +59,6 @@ class Test(Base, UUIDPKMixin, TimestampMixin):
     test_questions: Mapped[list["TestQuestion"]] = relationship(
         back_populates="test", cascade="all, delete-orphan", order_by="TestQuestion.order_index"
     )
-    exam = relationship("Exam")
     course = relationship("Course")
 
 

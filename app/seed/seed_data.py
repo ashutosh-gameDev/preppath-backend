@@ -16,7 +16,7 @@ the tags above) before inserting fresh ones, so it's safe to re-run.
 import random
 import sys
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -30,14 +30,12 @@ from app.models.course import Course, Subject, Topic
 from app.models.enums import (
     AchievementCriteria,
     ContentStatus,
-    ExamEventType,
     TestAttemptStatus,
     TestType,
     UserRole,
     XPReason,
 )
 from app.models.enrollment import CourseEnrollment
-from app.models.exam import Exam, ExamEvent, UserExamFollow
 from app.models.gamification import Achievement, UserAchievement, XPTransaction
 from app.models.pyq_paper import PYQPaper
 from app.models.question import Question, Tag
@@ -74,7 +72,6 @@ def clear_seed_data(db) -> None:
         db.query(TestAttempt).filter(TestAttempt.user_id.in_(seed_user_ids)).delete(synchronize_session=False)
         db.query(XPTransaction).filter(XPTransaction.user_id.in_(seed_user_ids)).delete(synchronize_session=False)
         db.query(UserAchievement).filter(UserAchievement.user_id.in_(seed_user_ids)).delete(synchronize_session=False)
-        db.query(UserExamFollow).filter(UserExamFollow.user_id.in_(seed_user_ids)).delete(synchronize_session=False)
         db.query(CourseEnrollment).filter(CourseEnrollment.user_id.in_(seed_user_ids)).delete(synchronize_session=False)
         db.query(Profile).filter(Profile.user_id.in_(seed_user_ids)).delete(synchronize_session=False)
         db.query(User).filter(User.id.in_(seed_user_ids)).delete(synchronize_session=False)
@@ -91,10 +88,6 @@ def clear_seed_data(db) -> None:
         db.query(Question).filter(Question.pyq_paper_id.in_(seed_paper_ids)).delete(synchronize_session=False)
         db.query(PYQPaper).filter(PYQPaper.id.in_(seed_paper_ids)).delete(synchronize_session=False)
     db.query(Achievement).delete(synchronize_session=False)
-
-    for exam in db.execute(select(Exam)).scalars().all():
-        db.query(ExamEvent).filter(ExamEvent.exam_id == exam.id).delete(synchronize_session=False)
-        db.delete(exam)
 
     for course in db.execute(select(Course)).scalars().all():
         db.delete(course)
@@ -235,63 +228,6 @@ def seed_questions(db, taxonomy: dict, admin_id: uuid.UUID) -> dict:
     return questions_by_scope
 
 
-def seed_exams(db, taxonomy: dict) -> dict:
-    today = date.today()
-    exams = {}
-
-    ssc = Exam(
-        course_id=taxonomy["ssc-cgl"]["course"].id,
-        name="SSC CGL 2026",
-        slug="ssc-cgl-2026",
-        description="Staff Selection Commission Combined Graduate Level 2026 examination.",
-        conducting_body="Staff Selection Commission",
-        is_published=True,
-    )
-    bank = Exam(
-        course_id=taxonomy["bank-po"]["course"].id,
-        name="Bank PO 2026",
-        slug="bank-po-2026",
-        description="Probationary Officer recruitment exam 2026.",
-        conducting_body="IBPS",
-        is_published=True,
-    )
-    db.add_all([ssc, bank])
-    db.flush()
-    exams["ssc-cgl"] = ssc
-    exams["bank-po"] = bank
-
-    event_specs = {
-        ssc.id: [
-            (ExamEventType.APPLICATION_START, "Application Window Opens", today - timedelta(days=40)),
-            (ExamEventType.APPLICATION_END, "Application Deadline", today - timedelta(days=10)),
-            (ExamEventType.ADMIT_CARD, "Admit Card Release", today + timedelta(days=14)),
-            (ExamEventType.EXAM_DATE, "Tier 1 Exam Date", today + timedelta(days=28)),
-            (ExamEventType.RESULT, "Tier 1 Result", today + timedelta(days=70)),
-        ],
-        bank.id: [
-            (ExamEventType.APPLICATION_START, "Application Window Opens", today - timedelta(days=20)),
-            (ExamEventType.APPLICATION_END, "Application Deadline", today + timedelta(days=5)),
-            (ExamEventType.ADMIT_CARD, "Admit Card Release", today + timedelta(days=35)),
-            (ExamEventType.EXAM_DATE, "Prelims Exam Date", today + timedelta(days=45)),
-        ],
-    }
-    for exam_id, events in event_specs.items():
-        for event_type, title, event_date in events:
-            db.add(
-                ExamEvent(
-                    exam_id=exam_id,
-                    event_type=event_type,
-                    title=title,
-                    description=f"{title} - official notification will be posted on the commission's website.",
-                    event_date=event_date,
-                    external_link="https://example.gov.in/notifications",
-                    is_published=True,
-                )
-            )
-    db.flush()
-    return exams
-
-
 def seed_achievements(db) -> list[Achievement]:
     specs = [
         ("first_test", "First Test", "Complete your first mock test or PYQ paper.", "flag", AchievementCriteria.FIRST_TEST, 1, 20),
@@ -312,11 +248,10 @@ def seed_achievements(db) -> list[Achievement]:
     return achievements
 
 
-def seed_tests(db, taxonomy: dict, exams: dict, questions_by_scope: dict, admin_id: uuid.UUID) -> None:
-    for course_slug, exam_key in [("ssc-cgl", "ssc-cgl"), ("bank-po", "bank-po")]:
+def seed_tests(db, taxonomy: dict, questions_by_scope: dict, admin_id: uuid.UUID) -> None:
+    for course_slug in ["ssc-cgl", "bank-po"]:
         data = taxonomy[course_slug]
         course = data["course"]
-        exam = exams[exam_key]
 
         # Mock tests: one auto-built full-length test + one shorter subject test.
         rules = []
@@ -335,7 +270,6 @@ def seed_tests(db, taxonomy: dict, exams: dict, questions_by_scope: dict, admin_
                 title=f"{SEED_PREFIX}{course.name} Full Mock Test 1",
                 test_type=TestType.MOCK,
                 course_id=course.id,
-                exam_id=exam.id,
                 duration_minutes=45,
                 negative_marking=0.25,
                 instructions="Attempt all questions. Each wrong answer deducts 0.25 marks.",
@@ -365,7 +299,6 @@ def seed_tests(db, taxonomy: dict, exams: dict, questions_by_scope: dict, admin_
                     title=f"{SEED_PREFIX}{course.name} PYQ {year} Tier 1 {shift}",
                     test_type=TestType.PYQ,
                     course_id=course.id,
-                    exam_id=exam.id,
                     pyq_year=year,
                     pyq_paper_label=f"Tier 1 {shift}",
                     duration_minutes=30,
@@ -395,7 +328,7 @@ STUDENT_PROFILES = [
 ]
 
 
-def seed_users_and_attempts(db, taxonomy: dict, exams: dict, questions_by_scope: dict) -> None:
+def seed_users_and_attempts(db, taxonomy: dict, questions_by_scope: dict) -> None:
     all_questions = [q for qs in questions_by_scope.values() for q in qs]
 
     for i, (name, skill, boost_subject) in enumerate(STUDENT_PROFILES):
@@ -414,12 +347,8 @@ def seed_users_and_attempts(db, taxonomy: dict, exams: dict, questions_by_scope:
         db.add(profile)
         db.flush()
 
-        # Follow 1-2 exams.
-        for exam in RNG.sample(list(exams.values()), k=RNG.choice([1, 2])):
-            db.add(UserExamFollow(user_id=user.id, exam_id=exam.id))
-
-        # Enroll in 1-2 courses ("My Courses") - independent of exam-following,
-        # mirrors the real onboarding flow (pick a course, add more later).
+        # Enroll in 1-2 courses ("My Courses") - mirrors the real onboarding
+        # flow (pick a course, add more later).
         courses = [data["course"] for data in taxonomy.values()]
         for course in RNG.sample(courses, k=RNG.choice([1, len(courses)])):
             db.add(CourseEnrollment(user_id=user.id, course_id=course.id))
@@ -537,11 +466,10 @@ def main() -> None:
         admin = seed_admin(db)
         taxonomy = seed_courses_and_taxonomy(db)
         questions_by_scope = seed_questions(db, taxonomy, admin.id)
-        exams = seed_exams(db, taxonomy)
         seed_achievements(db)
-        seed_tests(db, taxonomy, exams, questions_by_scope, admin.id)
+        seed_tests(db, taxonomy, questions_by_scope, admin.id)
         print("Seeding student demo accounts and attempt history (this simulates ~60 days of activity per student)...")
-        seed_users_and_attempts(db, taxonomy, exams, questions_by_scope)
+        seed_users_and_attempts(db, taxonomy, questions_by_scope)
         db.commit()
         print("\nSeed complete.")
         print("NOTE: seeded student accounts are demo-only (not real Supabase Auth users) and cannot log in directly.")

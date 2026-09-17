@@ -233,6 +233,14 @@ class BulkImportPreview(ORMModel):
     cache/token is needed - the admin frontend either (a) lets the admin
     review and POSTs `valid_rows` straight to the commit endpoint, or (b) the
     admin fixes the source file and re-uploads for a fresh preview.
+
+    One exception to "nothing written until commit": a row referencing a PYQ
+    paper (exam/year/source) that doesn't exist yet auto-creates it during
+    THIS preview step (see bulk_import_service.validate_rows) so the file
+    doesn't need a separate "create the paper first" round trip. Re-previewing
+    the same unmatched exam/year/source twice without ever committing
+    questions creates two near-duplicate empty papers - a minor, easily
+    cleaned-up cost, not a data-integrity issue.
     """
     total_rows: int
     valid_count: int

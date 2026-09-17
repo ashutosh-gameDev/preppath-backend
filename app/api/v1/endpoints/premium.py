@@ -9,7 +9,7 @@ Local development without a Razorpay account: if RAZORPAY_KEY_ID/SECRET
 aren't set AND the backend is running with ENVIRONMENT=development, checkout
 returns `dev_mode=True` and the frontend calls `/premium/dev-complete`
 instead of opening the real Razorpay checkout - same end state (a `paid`
-Payment row, extended `premium_until`), no real payment gateway involved.
+Payment row, extended `tier_expires_at`), no real payment gateway involved.
 This is hard-disabled in any other environment (see `_dev_mode_allowed`).
 """
 import hashlib
@@ -43,7 +43,10 @@ RAZORPAY_ORDERS_URL = "https://api.razorpay.com/v1/orders"
 
 def _plans_out() -> list[PlanOut]:
     return [
-        PlanOut(key=p.key, label=p.label, amount_paise=p.amount_paise, amount_rupees=p.amount_paise / 100, duration_days=p.duration_days)
+        PlanOut(
+            key=p.key, label=p.label, amount_paise=p.amount_paise, amount_rupees=p.amount_paise / 100,
+            duration_days=p.duration_days, tier=p.tier,
+        )
         for p in premium_service.PLANS.values()
     ]
 
@@ -60,7 +63,8 @@ def _dev_mode_allowed() -> bool:
 def get_status(profile: Profile = Depends(get_current_active_profile)):
     return PremiumStatusOut(
         is_premium=premium_service.is_premium(profile),
-        premium_until=profile.premium_until,
+        tier=premium_service.effective_tier(profile),
+        tier_expires_at=profile.tier_expires_at,
         plans=_plans_out(),
     )
 
@@ -128,7 +132,9 @@ def dev_complete(
     premium_service.mark_paid(db, payment)
     premium_service.grant_premium(db, profile, plan)
 
-    return PremiumStatusOut(is_premium=True, premium_until=profile.premium_until, plans=_plans_out())
+    return PremiumStatusOut(
+        is_premium=True, tier=premium_service.effective_tier(profile), tier_expires_at=profile.tier_expires_at, plans=_plans_out()
+    )
 
 
 @router.post("/verify", response_model=PremiumStatusOut)
@@ -160,7 +166,12 @@ def verify(
     if plan:
         premium_service.grant_premium(db, profile, plan)
 
-    return PremiumStatusOut(is_premium=premium_service.is_premium(profile), premium_until=profile.premium_until, plans=_plans_out())
+    return PremiumStatusOut(
+        is_premium=premium_service.is_premium(profile),
+        tier=premium_service.effective_tier(profile),
+        tier_expires_at=profile.tier_expires_at,
+        plans=_plans_out(),
+    )
 
 
 @router.post("/webhook")

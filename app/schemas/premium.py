@@ -10,6 +10,7 @@ class PlanOut(ORMModel):
     amount_paise: int
     amount_rupees: float
     duration_days: int
+    tier: str
 
 
 class CheckoutRequest(ORMModel):
@@ -40,5 +41,6 @@ class DevCompleteRequest(ORMModel):
 
 class PremiumStatusOut(ORMModel):
     is_premium: bool
-    premium_until: datetime | None
+    tier: str
+    tier_expires_at: datetime | None
     plans: list[PlanOut]

@@ -4,7 +4,7 @@ Python-level enums shared by models, schemas and services.
 These are stored as plain `String` columns (validated by Pydantic/Python at
 the application layer) rather than native Postgres ENUM types. That keeps the
 set of allowed values extensible (e.g. adding a new QuestionType or
-ExamEventType later) with an application deploy instead of an
+UserTier later) with an application deploy instead of an
 `ALTER TYPE ... ADD VALUE` migration.
 """
 from enum import Enum
@@ -19,11 +19,22 @@ class UserRole(StrEnum):
     STUDENT = "student"
     # Restricted admin-panel account for interns/content team: can manage
     # questions and tests/PYQ papers only (see api/deps.require_content_access)
-    # - never courses, users, settings, or exam notifications. Created only by
-    # a super admin via /admin/team, never via self-signup.
+    # - never courses, users, or settings. Created only by a super admin via
+    # /admin/team, never via self-signup.
     CONTENT_EDITOR = "content_editor"
     ADMIN = "admin"
     SUPER_ADMIN = "super_admin"
+
+
+class UserTier(StrEnum):
+    """A student's subscription tier - independent of UserRole (which is
+    about admin-panel access, not what a student has paid for). Pro and
+    Premium both remove ads and lift the free 1-course cap; Premium is the
+    one tier planned to also sync the (future) Notes Board to the server -
+    see models/user.py Profile.tier."""
+    NORMAL = "normal"
+    PRO = "pro"
+    PREMIUM = "premium"
 
 
 class Difficulty(StrEnum):
@@ -70,15 +81,6 @@ class TestAttemptStatus(StrEnum):
     IN_PROGRESS = "in_progress"
     SUBMITTED = "submitted"
     ABANDONED = "abandoned"
-
-
-class ExamEventType(StrEnum):
-    APPLICATION_START = "application_start"
-    APPLICATION_END = "application_end"
-    ADMIT_CARD = "admit_card"
-    EXAM_DATE = "exam_date"
-    RESULT = "result"
-    OTHER = "other"
 
 
 class XPReason(StrEnum):

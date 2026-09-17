@@ -151,10 +151,15 @@ def validate_rows(
             # leave it unset rather than cross-wiring an unrelated chapter.
             subtopic = candidate if candidate and candidate.topic_id == topic.id else None
 
-        # pyq_paper: the row's own exam/year/source columns win when present
-        # and must match an EXISTING PYQ paper (same "no silent creation
-        # from a typo" rule as topic/subtopic above - unlike those, this one
-        # falls back to a paper-level default since every question requires one).
+        # pyq_paper: the row's own exam/year/source columns win when present.
+        # Unlike topic/subtopic above (which error on an unmatched name - a
+        # likely typo against a fixed syllabus), an unmatched exam/year/
+        # source auto-creates a new PYQPaper: bulk files are commonly the
+        # FIRST time a given paper's name is typed anywhere, so forcing a
+        # separate "create the paper, then re-upload" round trip is pure
+        # friction. Cached in `papers` so every row in this same file for the
+        # same exam/year/source reuses the one paper instead of creating a
+        # duplicate per row.
         pyq_paper_id: uuid.UUID | None = None
         exam_raw = str(row.get("exam", "")).strip()
         year_raw = str(row.get("year", "")).strip()
@@ -164,16 +169,17 @@ def validate_rows(
                 paper_year = int(float(year_raw)) if year_raw else None
             except ValueError:
                 paper_year = None
-            paper = papers.get((exam_raw.lower(), paper_year, source_raw.lower() or None))
+            cache_key = (exam_raw.lower(), paper_year, source_raw.lower() or None)
+            paper = papers.get(cache_key)
             if paper is None:
-                row_errors.append(
-                    f"Unknown PYQ paper for exam '{exam_raw}'"
-                    + (f", year {paper_year}" if paper_year else "")
-                    + (f", '{source_raw}'" if source_raw else "")
-                    + " - create it first from the Questions page or Upload Paper screen"
+                paper = PYQPaper(
+                    exam_name=exam_raw, year=paper_year, label=source_raw or None,
+                    course_id=course.id if course else defaults.course_id,
                 )
-            else:
-                pyq_paper_id = paper.id
+                db.add(paper)
+                db.flush()
+                papers[cache_key] = paper
+            pyq_paper_id = paper.id
         elif defaults.pyq_paper_id:
             pyq_paper_id = defaults.pyq_paper_id
         else:

@@ -14,7 +14,8 @@ from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.user import Profile, User
 from app.schemas.common import Page
-from app.schemas.user import AdminUserListItem, AdminUserStatusUpdate, UserOut
+from app.schemas.user import AdminUserListItem, AdminUserStatusUpdate, AdminUserTierUpdate, UserOut
+from app.services.premium_service import effective_tier
 
 router = APIRouter(prefix="/admin/users", tags=["admin:users"])
 
@@ -51,6 +52,8 @@ def list_users(
             questions_attempted=p.questions_attempted,
             accuracy=round(100 * p.questions_correct / p.questions_attempted, 1) if p.questions_attempted else 0.0,
             tests_completed=p.tests_completed,
+            tier=effective_tier(p),
+            tier_expires_at=p.tier_expires_at,
         )
         for u, p in page_rows
     ]
@@ -76,4 +79,23 @@ def set_user_status(user_id: uuid.UUID, payload: AdminUserStatusUpdate, admin: U
     user.is_active = payload.is_active
     db.flush()
     user.profile = db.get(Profile, user.id)
+    return user
+
+
+@router.patch("/{user_id}/tier", response_model=UserOut)
+def set_user_tier(user_id: uuid.UUID, payload: AdminUserTierUpdate, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Manual tier override (comp a student, extend/revoke access) -
+    independent of the Razorpay purchase flow in premium_service."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    profile = db.get(Profile, user_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    if payload.tier not in {"normal", "pro", "premium"}:
+        raise HTTPException(status_code=400, detail="tier must be one of: normal, pro, premium")
+    profile.tier = payload.tier
+    profile.tier_expires_at = payload.tier_expires_at
+    db.flush()
+    user.profile = profile
     return user

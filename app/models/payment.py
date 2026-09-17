@@ -15,7 +15,7 @@ class Payment(Base, UUIDPKMixin):
     created in `created` status when checkout starts (Razorpay order
     created), then flipped to `paid` once the payment is verified (either by
     the client-side verify call or, more reliably, the Razorpay webhook) -
-    at which point `Profile.premium_until` is extended. Kept even after
+    at which point `Profile.tier_expires_at` is extended. Kept even after
     expiry as the purchase history / audit trail.
     """
     __tablename__ = "payments"

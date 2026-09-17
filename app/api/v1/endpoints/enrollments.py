@@ -21,9 +21,8 @@ from app.schemas.common import Message
 from app.schemas.enrollment import EnrolledCourseOut, EnrollRequest
 from app.services.premium_service import is_premium
 
-# Free tier: one course at a time. Premium (any plan): unlimited courses -
-# see services/premium_service.is_premium. Not a separate numeric tier, just
-# gating on the existing premium_until flag.
+# Normal tier: one course at a time. Pro/Premium: unlimited courses - see
+# services/premium_service.is_premium (true for either paid tier).
 FREE_COURSE_LIMIT = 1
 
 router = APIRouter(prefix="/enrollments", tags=["enrollments"])

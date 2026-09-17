@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin, require_content_access
 from app.db.session import get_db
 from app.models.admin import Report
+from app.models.enums import UserRole
 from app.models.question import Question, Tag
 from app.models.user import User
 from app.schemas.common import Message, Page
@@ -29,6 +30,25 @@ from app.services import bulk_import_service, storage_service
 from app.services.admin_log_service import log_action
 
 router = APIRouter(prefix="/admin/questions", tags=["admin:questions"])
+
+
+def _scope_own(q, admin: User):
+    """Content editors and admins only ever see/touch questions they
+    uploaded themselves - keeps one person's in-progress tagging/cleanup
+    from being disrupted by someone else's edits. Only super_admin sees
+    everything."""
+    if admin.role != UserRole.SUPER_ADMIN:
+        q = q.where(Question.created_by == admin.id)
+    return q
+
+
+def _require_owned(question: Question | None, admin: User) -> Question:
+    """Same ownership rule as `_scope_own`, for the single-row endpoints that
+    fetch by id directly (`db.get`) instead of a filterable select - 404 (not
+    403) so a non-owner can't even tell whether the id exists."""
+    if question is None or (admin.role != UserRole.SUPER_ADMIN and question.created_by != admin.id):
+        raise HTTPException(status_code=404, detail="Question not found")
+    return question
 
 
 def _get_or_create_tags(db: Session, names: list[str]) -> list[Tag]:
@@ -93,6 +113,7 @@ def list_questions(
         q = q.where(Question.display_number == display_number)
     if search:
         q = q.where(Question.question_text.ilike(f"%{search}%"))
+    q = _scope_own(q, admin)
 
     total = db.execute(select(func.count()).select_from(q.subquery())).scalar_one()
     items = db.execute(
@@ -103,10 +124,7 @@ def list_questions(
 
 @router.get("/{question_id}", response_model=QuestionAdminOut)
 def get_question(question_id: uuid.UUID, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
-    question = db.get(Question, question_id)
-    if question is None:
-        raise HTTPException(status_code=404, detail="Question not found")
-    return question
+    return _require_owned(db.get(Question, question_id), admin)
 
 
 @router.post("", response_model=QuestionAdminOut)
@@ -122,9 +140,7 @@ def create_question(payload: QuestionCreate, admin: User = Depends(require_conte
 
 @router.patch("/{question_id}", response_model=QuestionAdminOut)
 def update_question(question_id: uuid.UUID, payload: QuestionUpdate, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
-    question = db.get(Question, question_id)
-    if question is None:
-        raise HTTPException(status_code=404, detail="Question not found")
+    question = _require_owned(db.get(Question, question_id), admin)
     data = payload.model_dump(exclude_unset=True, exclude={"tags"})
     for field, value in data.items():
         setattr(question, field, value)
@@ -137,9 +153,7 @@ def update_question(question_id: uuid.UUID, payload: QuestionUpdate, admin: User
 
 @router.delete("/{question_id}", response_model=Message)
 def delete_question(question_id: uuid.UUID, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
-    question = db.get(Question, question_id)
-    if question is None:
-        raise HTTPException(status_code=404, detail="Question not found")
+    question = _require_owned(db.get(Question, question_id), admin)
     db.delete(question)
     db.flush()
     log_action(db, admin.id, "delete", "question", question_id)
@@ -241,7 +255,8 @@ def bulk_update_questions(
     if not data and payload.patch.tags is None:
         raise HTTPException(status_code=400, detail="No field to update was provided")
 
-    questions = db.execute(select(Question).where(Question.id.in_(payload.question_ids))).scalars().all()
+    q = _scope_own(select(Question).where(Question.id.in_(payload.question_ids)), admin)
+    questions = db.execute(q).scalars().all()
     tags = _get_or_create_tags(db, payload.patch.tags) if payload.patch.tags is not None else None
     updated = 0
     for question in questions:
@@ -262,7 +277,8 @@ def bulk_update_questions(
 def bulk_delete_questions(
     payload: BulkDeleteRequest, admin: User = Depends(require_content_access), db: Session = Depends(get_db)
 ):
-    questions = db.execute(select(Question).where(Question.id.in_(payload.question_ids))).scalars().all()
+    q = _scope_own(select(Question).where(Question.id.in_(payload.question_ids)), admin)
+    questions = db.execute(q).scalars().all()
     for question in questions:
         db.delete(question)
     db.flush()

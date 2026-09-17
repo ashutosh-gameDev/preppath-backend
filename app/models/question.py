@@ -77,9 +77,8 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     subtopic_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("subtopics.id", ondelete="SET NULL"), nullable=True
     )
-    # Which PYQ paper this question is from (see models/pyq_paper.py -
-    # deliberately NOT a foreign key to Exam, the followable/notification
-    # entity). Nullable at the DB level so existing untagged rows aren't
+    # Which PYQ paper this question is from (see models/pyq_paper.py).
+    # Nullable at the DB level so existing untagged rows aren't
     # forced through a backfill, but required by QuestionCreate going
     # forward - see that schema's docstring.
     pyq_paper_id: Mapped[uuid.UUID | None] = mapped_column(

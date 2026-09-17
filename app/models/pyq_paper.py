@@ -11,18 +11,11 @@ class PYQPaper(Base, UUIDPKMixin, TimestampMixin):
     """
     The specific PYQ paper a question is from, e.g. "SSC CGL 2023 Tier 1
     Shift 1" - the one field every question carries for categorizing and
-    bulk-editing by paper (see Question.pyq_paper_id).
+    bulk-editing by paper (see Question.pyq_paper_id). `exam_name` is plain
+    free text (there's no separate followable Exam entity in this platform -
+    Course is the only real organizing entity above a paper).
 
-    Deliberately NOT the same thing as `Exam` (the followable, notification
-    entity on the Notifications admin page) and NOT a foreign key to it -
-    `exam_name` here is plain free text. Tagging a question to a PYQ paper
-    must never create or touch an Exam row, and creating an Exam for
-    notifications must never create or touch a PYQ paper. They looked like
-    the same table once (before this was split out) and that was confusing;
-    keeping them fully separate, with this one named unambiguously as "PYQ
-    Paper" everywhere in the UI, is the whole point.
-
-    Also deliberately NOT tied to `Test` (test_type='pyq') - a question is
+    Deliberately NOT tied to `Test` (test_type='pyq') - a question is
     tagged to its PYQ paper before any full Test row exists for it (that's
     how the admin test builder's "load questions from a PYQ paper" picker
     works: it pulls already-tagged standalone questions together into a new

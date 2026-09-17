@@ -33,7 +33,6 @@ class TestCreate(ORMModel):
     title: str
     test_type: str = "mock"
     course_id: uuid.UUID | None = None
-    exam_id: uuid.UUID | None = None
     pyq_year: int | None = None
     pyq_paper_label: str | None = None
     # Scheduled window - when is_live is set, students can only start a new
@@ -57,7 +56,6 @@ class TestCreate(ORMModel):
 class TestUpdate(ORMModel):
     title: str | None = None
     course_id: uuid.UUID | None = None
-    exam_id: uuid.UUID | None = None
     pyq_year: int | None = None
     pyq_paper_label: str | None = None
     is_live: bool | None = None
@@ -73,8 +71,8 @@ class TestUpdate(ORMModel):
 class BulkTestUpdateRequest(ORMModel):
     """Same 'apply one patch to many rows at once' shape as
     BulkQuestionUpdateRequest, for the Tests/PYQ admin list's bulk-select
-    action bar (e.g. publish/archive several papers, or fix the exam/year/
-    course tag across several at once)."""
+    action bar (e.g. publish/archive several papers, or fix the year/course
+    tag across several at once)."""
     test_ids: list[uuid.UUID]
     patch: TestUpdate
 
@@ -95,7 +93,6 @@ class TestListItemOut(ORMModel):
     title: str
     test_type: str
     course_id: uuid.UUID | None
-    exam_id: uuid.UUID | None
     pyq_year: int | None
     pyq_paper_label: str | None
     is_live: bool = False

@@ -27,9 +27,9 @@ def get_monthly_leaderboard(limit: int = 50, user: User = Depends(get_current_us
     return leaderboard_service.monthly_leaderboard(db, user.id, limit)
 
 
-@router.get("/exam/{exam_id}", response_model=LeaderboardOut)
-def get_exam_leaderboard(exam_id: uuid.UUID, limit: int = 50, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return leaderboard_service.exam_leaderboard(db, exam_id, user.id, limit)
+@router.get("/course/{course_id}", response_model=LeaderboardOut)
+def get_course_leaderboard(course_id: uuid.UUID, limit: int = 50, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return leaderboard_service.course_leaderboard(db, course_id, user.id, limit)
 
 
 @router.get("/subject/{subject_id}", response_model=LeaderboardOut)

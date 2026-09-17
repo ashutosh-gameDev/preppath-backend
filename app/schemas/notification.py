@@ -15,8 +15,3 @@ class NotificationOut(ORMModel):
     created_at: datetime
     event_date: date | None = None
     external_link: str | None = None
-
-
-class UserExamFollowOut(ORMModel):
-    exam_id: uuid.UUID
-    notifications_enabled: bool
