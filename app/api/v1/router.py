@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     enrollments,
     jobs,
     leaderboard,
+    notes,
     notifications,
     practice,
     premium,
@@ -46,6 +47,7 @@ api_router.include_router(leaderboard.router)
 api_router.include_router(profile.router)
 api_router.include_router(notifications.router)
 api_router.include_router(jobs.router)
+api_router.include_router(notes.router)
 api_router.include_router(tools.router)
 api_router.include_router(premium.router)
 api_router.include_router(dev_auth.router)  # 404s unless ENVIRONMENT=development

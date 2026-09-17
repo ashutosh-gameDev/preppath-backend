@@ -15,6 +15,7 @@ from app.models.attempt import Attempt  # noqa: F401
 from app.models.gamification import XPTransaction, Achievement, UserAchievement  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 from app.models.job_posting import JobPosting  # noqa: F401
+from app.models.notes import NoteCategory, NotePage  # noqa: F401
 from app.models.admin import Report, AdminActivityLog, PlatformSetting  # noqa: F401
 
 __all__ = [
@@ -41,6 +42,8 @@ __all__ = [
     "UserAchievement",
     "Notification",
     "JobPosting",
+    "NoteCategory",
+    "NotePage",
     "Report",
     "AdminActivityLog",
     "PlatformSetting",
