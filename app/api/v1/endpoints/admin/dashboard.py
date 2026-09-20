@@ -12,7 +12,14 @@ from app.models.pyq_paper import PYQPaper
 from app.models.question import Question
 from app.models.test import Test, TestAttempt
 from app.models.user import User
-from app.schemas.admin import AdminDashboardCharts, AdminDashboardStats, DailySeriesPoint, PapersOverviewItem, PopularItem
+from app.schemas.admin import (
+    AdminDashboardCharts,
+    AdminDashboardStats,
+    DailySeriesPoint,
+    PapersOverviewItem,
+    PopularItem,
+    UploaderStatItem,
+)
 from app.schemas.statistics import LeaderboardOut
 from app.services import leaderboard_service
 
@@ -150,3 +157,36 @@ def dashboard_leaderboard(
     if scope == "monthly":
         return leaderboard_service.monthly_leaderboard(db, admin.id, limit)
     return leaderboard_service.global_leaderboard(db, admin.id, limit)
+
+
+@router.get("/uploader-stats", response_model=list[UploaderStatItem])
+def uploader_stats(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Total questions each team member has uploaded (all statuses), most
+    first. Questions with no recorded uploader (older rows, or a deleted
+    account) are grouped under "Unknown"."""
+    rows = db.execute(
+        select(
+            Question.created_by,
+            User.username,
+            User.full_name,
+            User.email,
+            User.role,
+            func.count(Question.id),
+            func.count(Question.id).filter(Question.status == "published"),
+            func.max(Question.created_at),
+        )
+        .outerjoin(User, User.id == Question.created_by)
+        .group_by(Question.created_by, User.username, User.full_name, User.email, User.role)
+        .order_by(func.count(Question.id).desc())
+    ).all()
+    return [
+        UploaderStatItem(
+            user_id=uid,
+            label=(username or full_name or email) if uid else "Unknown",
+            role=role,
+            question_count=total,
+            published_count=published,
+            last_upload_at=last,
+        )
+        for uid, username, full_name, email, role, total, published, last in rows
+    ]

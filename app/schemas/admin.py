@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from app.schemas.common import ORMModel
 
@@ -46,3 +46,13 @@ class PapersOverviewItem(ORMModel):
     course_name: str | None
     question_count: int
     uploaders: list[str]
+
+
+class UploaderStatItem(ORMModel):
+    """One row of the dashboard's "who uploaded how many questions" table."""
+    user_id: uuid.UUID | None
+    label: str
+    role: str | None
+    question_count: int
+    published_count: int
+    last_upload_at: datetime | None
