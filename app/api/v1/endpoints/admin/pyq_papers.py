@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_content_access
 from app.db.session import get_db
+from app.models.enums import UserRole
 from app.models.pyq_paper import PYQPaper
 from app.models.question import Question
 from app.models.user import User
@@ -26,7 +27,7 @@ router = APIRouter(prefix="/admin/pyq-papers", tags=["admin:pyq-papers"])
 def _to_out(paper: PYQPaper, count: int) -> PYQPaperOut:
     return PYQPaperOut(
         id=paper.id, exam_name=paper.exam_name, year=paper.year, label=paper.label, language=paper.language,
-        course_id=paper.course_id, created_at=paper.created_at, question_count=count,
+        course_id=paper.course_id, is_published=paper.is_published, created_at=paper.created_at, question_count=count,
     )
 
 
@@ -72,10 +73,18 @@ def update_pyq_paper(
     paper = db.get(PYQPaper, paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail="PYQ paper not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    publish = changes.pop("is_published", None)
+    if publish is not None and publish != paper.is_published:
+        if admin.role != UserRole.SUPER_ADMIN:
+            raise HTTPException(status_code=403, detail="Only a super admin can publish or unpublish a paper.")
+        paper.is_published = publish
+        log_action(db, admin.id, "publish" if publish else "unpublish", "pyq_paper", paper.id)
+    for field, value in changes.items():
         setattr(paper, field, value)
     db.flush()
-    log_action(db, admin.id, "update", "pyq_paper", paper.id)
+    if changes:
+        log_action(db, admin.id, "update", "pyq_paper", paper.id)
     count = db.execute(select(func.count(Question.id)).where(Question.pyq_paper_id == paper.id)).scalar_one()
     return _to_out(paper, count)
 

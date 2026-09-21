@@ -1,7 +1,8 @@
 """
-Admin test builder - creates `Test` rows for both mock tests (`test_type
-= 'mock'`) and PYQ papers (`test_type = 'pyq'`), manually and/or via
-automatic subject/topic/difficulty selection rules. See services/test_service.py.
+Admin test builder - creates mock `Test` rows, manually and/or via automatic
+subject/topic/difficulty selection rules. See services/test_service.py.
+PYQ papers are no longer built as tests: students open the PYQ Question Paper
+itself (see admin/pyq_papers.py and the student /pyq endpoints).
 """
 import uuid
 
@@ -71,6 +72,11 @@ def get_test(test_id: uuid.UUID, admin: User = Depends(require_content_access), 
 
 @router.post("", response_model=TestDetailOut)
 def create_test(payload: TestCreate, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
+    if payload.test_type != "mock":
+        raise HTTPException(
+            status_code=400,
+            detail="PYQ papers are managed under Question Papers - only mock tests are built here.",
+        )
     test = test_service.build_test(db, payload, admin.id)
     log_action(db, admin.id, "create", "test", test.id, {"test_type": test.test_type})
     return _to_detail(db, test)

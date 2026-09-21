@@ -14,7 +14,7 @@ from app.api.deps import get_current_active_profile, get_current_user
 from app.db.session import get_db
 from app.models.attempt import Attempt
 from app.models.enrollment import CourseEnrollment
-from app.models.enums import ContentStatus, TestAttemptStatus
+from app.models.enums import ContentStatus, TestAttemptStatus, TestType
 from app.models.question import Question
 from app.models.test import Test, TestAttempt, TestQuestion, TestSection
 from app.models.user import Profile, User
@@ -64,7 +64,6 @@ def _to_list_item(db: Session, test: Test, user_id: uuid.UUID) -> TestListItemOu
 @router.get("", response_model=list[TestListItemOut])
 def list_tests(
     course_id: uuid.UUID | None = None,
-    test_type: str = "mock",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -77,7 +76,7 @@ def list_tests(
         return []
     q = select(Test).where(
         Test.status == ContentStatus.PUBLISHED,
-        Test.test_type == test_type,
+        Test.test_type == TestType.MOCK,
         Test.course_id.in_([course_id] if course_id else enrolled),
     )
     tests = db.execute(q.order_by(Test.created_at.desc())).scalars().all()
@@ -87,7 +86,7 @@ def list_tests(
 @router.get("/{test_id}", response_model=TestDetailOut)
 def get_test(test_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     test = db.get(Test, test_id)
-    if test is None or test.status != ContentStatus.PUBLISHED:
+    if test is None or test.status != ContentStatus.PUBLISHED or test.test_type != TestType.MOCK:
         raise HTTPException(status_code=404, detail="Test not found")
     item = _to_list_item(db, test, user.id)
     sections = db.execute(select(TestSection).where(TestSection.test_id == test.id)).scalars().all()
@@ -97,7 +96,7 @@ def get_test(test_id: uuid.UUID, user: User = Depends(get_current_user), db: Ses
 @router.post("/{test_id}/start", response_model=TestAttemptStartOut)
 def start_test(test_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     test = db.get(Test, test_id)
-    if test is None or test.status != ContentStatus.PUBLISHED:
+    if test is None or test.status != ContentStatus.PUBLISHED or test.test_type != TestType.MOCK:
         raise HTTPException(status_code=404, detail="Test not found")
 
     if test.is_live:
