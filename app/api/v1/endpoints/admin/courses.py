@@ -29,7 +29,7 @@ from app.schemas.course import (
 )
 from app.services import course_import_service
 from app.services.admin_log_service import log_action
-from app.services.course_service import unique_slug as _unique_slug
+from app.services.course_service import publish_course_tree, unique_slug as _unique_slug
 
 router = APIRouter(prefix="/admin/courses", tags=["admin:courses"])
 
@@ -80,12 +80,20 @@ def update_course(course_id: uuid.UUID, payload: CourseUpdate, admin: User = Dep
     course = db.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
+    was_published = course.is_published
     for field, value in payload.model_dump(exclude_unset=True).items():
         if field == "name" and value:
             course.slug = _unique_slug(db, Course, value, exclude_id=course.id)
         setattr(course, field, value)
     db.flush()
-    log_action(db, admin.id, "update", "course", course.id)
+    extra = None
+    if course.is_published and not was_published:
+        # Publishing a course publishes its whole syllabus (subjects, chapters,
+        # subtopics). Only the draft -> published switch does this, so saving an
+        # already-published course never re-publishes items deliberately kept as drafts.
+        extra = {"published_children": publish_course_tree(db, course.id)}
+        db.refresh(course)
+    log_action(db, admin.id, "update", "course", course.id, extra)
     return course
 
 

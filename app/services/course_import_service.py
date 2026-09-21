@@ -29,6 +29,10 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
 
     for course_in in payload.courses:
         course = _find_by_name_ci(db, Course, course_in.name)
+        # A course created here already published takes its whole imported
+        # syllabus live with it (mirrors publishing a course in the CRM).
+        # An existing course is only extended - its new items keep their own flags.
+        publish_children = course is None and course_in.is_published
         if course is None:
             course = Course(
                 name=course_in.name.strip(),
@@ -49,7 +53,7 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
                 subject = Subject(
                     name=subject_in.name.strip(),
                     order_index=subject_in.order_index,
-                    is_published=subject_in.is_published,
+                    is_published=subject_in.is_published or publish_children,
                     course_id=course.id,
                     slug=unique_slug(db, Subject, subject_in.name, scope_filter=Subject.course_id == course.id),
                 )
@@ -63,7 +67,7 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
                     topic = Topic(
                         name=topic_in.name.strip(),
                         order_index=topic_in.order_index,
-                        is_published=topic_in.is_published,
+                        is_published=topic_in.is_published or publish_children,
                         video_url=topic_in.video_url,
                         subject_id=subject.id,
                         slug=unique_slug(db, Topic, topic_in.name, scope_filter=Topic.subject_id == subject.id),
@@ -78,7 +82,7 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
                         subtopic = Subtopic(
                             name=subtopic_in.name.strip(),
                             order_index=subtopic_in.order_index,
-                            is_published=subtopic_in.is_published,
+                            is_published=subtopic_in.is_published or publish_children,
                             youtube_videos=subtopic_in.youtube_videos,
                             topic_id=topic.id,
                             slug=unique_slug(db, Subtopic, subtopic_in.name, scope_filter=Subtopic.topic_id == topic.id),
