@@ -63,7 +63,28 @@ def _slug(text: str) -> str:
     return text.lower().replace(" ", "-").replace("&", "and").replace("--", "-")
 
 
+
+def _refuse_remote_database() -> None:
+    """clear_seed_data() deletes every course and achievement, not just
+    seeded ones - fine on a scratch local DB, catastrophic on the real one
+    (backend/.env normally points at production). Refuse unless the database
+    is on this machine, or the caller explicitly opts in."""
+    import os
+    from urllib.parse import urlparse
+
+    from app.core.config import settings
+
+    host = urlparse(settings.DATABASE_URL.replace("postgresql+psycopg", "postgresql")).hostname or ""
+    if host in {"localhost", "127.0.0.1", "::1"} or os.environ.get("ALLOW_SEED_ON_REMOTE_DB") == "1":
+        return
+    raise SystemExit(
+        f"Refusing to run: DATABASE_URL points at '{host}', not this machine. Seeding/clearing deletes real "
+        "courses. Use a local database (or set ALLOW_SEED_ON_REMOTE_DB=1 if you truly mean it)."
+    )
+
+
 def clear_seed_data(db) -> None:
+    _refuse_remote_database()
     print("Clearing any previously seeded data...")
     seed_users = db.execute(select(User).where(User.email.like(f"%{SEED_EMAIL_DOMAIN}"))).scalars().all()
     seed_user_ids = [u.id for u in seed_users]

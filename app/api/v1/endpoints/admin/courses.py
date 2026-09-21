@@ -1,13 +1,14 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import require_admin, require_content_access
 from app.db.session import get_db
 from app.models.course import Course, Subject, Subtopic, Topic
+from app.models.question import Question
 from app.models.user import User
 from app.schemas.common import Message
 from app.schemas.course import (
@@ -93,12 +94,21 @@ def delete_course(course_id: uuid.UUID, admin: User = Depends(require_admin), db
     course = db.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
+    question_count = db.execute(select(func.count(Question.id)).where(Question.course_id == course_id)).scalar_one()
+    if question_count:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"'{course.name}' still has {question_count} question(s). Deleting the course would permanently "
+                "delete them too - move them to another course or delete them from the Questions page first."
+            ),
+        )
     try:
         db.delete(course)
         db.flush()
     except IntegrityError:
-        raise HTTPException(status_code=409, detail="Cannot delete a course that has questions/tests referencing it")
-    log_action(db, admin.id, "delete", "course", course_id)
+        raise HTTPException(status_code=409, detail="Cannot delete a course that still has questions referencing it")
+    log_action(db, admin.id, "delete", "course", course_id, {"name": course.name})
     return Message(detail="Course deleted")
 
 
@@ -136,12 +146,21 @@ def delete_subject(subject_id: uuid.UUID, admin: User = Depends(require_admin), 
     subject = db.get(Subject, subject_id)
     if subject is None:
         raise HTTPException(status_code=404, detail="Subject not found")
+    question_count = db.execute(select(func.count(Question.id)).where(Question.subject_id == subject_id)).scalar_one()
+    if question_count:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"'{subject.name}' still has {question_count} question(s). Deleting the subject would permanently "
+                "delete them too - move them to another subject or delete them from the Questions page first."
+            ),
+        )
     try:
         db.delete(subject)
         db.flush()
     except IntegrityError:
-        raise HTTPException(status_code=409, detail="Cannot delete a subject that has questions/tests referencing it")
-    log_action(db, admin.id, "delete", "subject", subject_id)
+        raise HTTPException(status_code=409, detail="Cannot delete a subject that still has questions referencing it")
+    log_action(db, admin.id, "delete", "subject", subject_id, {"name": subject.name})
     return Message(detail="Subject deleted")
 
 

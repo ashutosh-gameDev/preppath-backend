@@ -20,6 +20,7 @@ from app.api.v1.endpoints import (
     users,
 )
 from app.api.v1.endpoints.admin import (
+    backup as admin_backup,
     courses as admin_courses,
     dashboard as admin_dashboard,
     job_postings as admin_job_postings,
@@ -54,6 +55,7 @@ api_router.include_router(dev_auth.router)  # 404s unless ENVIRONMENT=developmen
 
 # Admin-only
 api_router.include_router(admin_dashboard.router)
+api_router.include_router(admin_backup.router)
 api_router.include_router(admin_courses.router)
 api_router.include_router(admin_questions.router)
 api_router.include_router(admin_pyq_papers.router)

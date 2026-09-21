@@ -60,11 +60,14 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
         index=True,
     )
 
+    # RESTRICT, not CASCADE: deleting a course/subject must never silently
+    # destroy the questions inside it (that is exactly how content was lost
+    # before). The admin delete endpoints turn this into a clear 409.
     course_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="RESTRICT"), nullable=False
     )
     subject_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("subjects.id", ondelete="RESTRICT"), nullable=False
     )
     topic_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("topics.id", ondelete="SET NULL"), nullable=True
