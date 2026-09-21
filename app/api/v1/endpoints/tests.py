@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_active_profile, get_current_user
 from app.db.session import get_db
 from app.models.attempt import Attempt
+from app.models.enrollment import CourseEnrollment
 from app.models.enums import ContentStatus, TestAttemptStatus
 from app.models.question import Question
 from app.models.test import Test, TestAttempt, TestQuestion, TestSection
@@ -67,9 +68,18 @@ def list_tests(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    q = select(Test).where(Test.status == ContentStatus.PUBLISHED, Test.test_type == test_type)
-    if course_id:
-        q = q.where(Test.course_id == course_id)
+    # Students only see tests for courses they enrolled in - asking for some
+    # other course (or none at all) never widens that.
+    enrolled = set(
+        db.execute(select(CourseEnrollment.course_id).where(CourseEnrollment.user_id == user.id)).scalars().all()
+    )
+    if course_id and course_id not in enrolled:
+        return []
+    q = select(Test).where(
+        Test.status == ContentStatus.PUBLISHED,
+        Test.test_type == test_type,
+        Test.course_id.in_([course_id] if course_id else enrolled),
+    )
     tests = db.execute(q.order_by(Test.created_at.desc())).scalars().all()
     return [_to_list_item(db, t, user.id) for t in tests]
 
