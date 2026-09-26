@@ -9,6 +9,7 @@ from app.models.course import Course, Subject, Topic, TopicProgress  # noqa: F40
 from app.models.question import Question, Tag, question_tags  # noqa: F401
 from app.models.pyq_paper import PYQPaper  # noqa: F401
 from app.models.enrollment import CourseEnrollment  # noqa: F401
+from app.models.bookmark import QuestionBookmark  # noqa: F401
 from app.models.payment import Payment  # noqa: F401
 from app.models.test import Test, TestSection, TestQuestion, TestAttempt  # noqa: F401
 from app.models.attempt import Attempt  # noqa: F401
@@ -31,6 +32,7 @@ __all__ = [
     "question_tags",
     "PYQPaper",
     "CourseEnrollment",
+    "QuestionBookmark",
     "Payment",
     "Test",
     "TestSection",

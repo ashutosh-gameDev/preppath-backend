@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.models.attempt import Attempt
 from app.models.course import Subject, Topic
 from app.models.gamification import XPTransaction
+from app.models.question import Question
 from app.models.test import Test, TestAttempt
 from app.services.settings_service import get_setting
 
@@ -344,3 +345,33 @@ def improvement_analysis(db: Session, user_id: uuid.UUID, period_days: int = 30)
         )
     results.sort(key=lambda r: -r["change_pct"])
     return results
+
+
+def latest_wrong_attempts(
+    db: Session, user_id: uuid.UUID, page: int, page_size: int
+) -> tuple[list[tuple[Attempt, Question]], int]:
+    """The Mistake Book: every question whose MOST RECENT attempt by this
+    student was wrong. Re-answering it correctly later removes it from this
+    list automatically (the "most recent" attempt is now a correct one) -
+    no separate resolved/unresolved flag to maintain."""
+    latest_per_question = (
+        select(Attempt.question_id, func.max(Attempt.attempted_at).label("latest_at"))
+        .where(Attempt.user_id == user_id)
+        .group_by(Attempt.question_id)
+        .subquery()
+    )
+    q = (
+        select(Attempt, Question)
+        .join(
+            latest_per_question,
+            (Attempt.question_id == latest_per_question.c.question_id)
+            & (Attempt.attempted_at == latest_per_question.c.latest_at),
+        )
+        .join(Question, Question.id == Attempt.question_id)
+        .where(Attempt.user_id == user_id, Attempt.is_correct.is_(False))
+    )
+    total = db.execute(select(func.count()).select_from(q.subquery())).scalar_one()
+    rows = db.execute(
+        q.order_by(latest_per_question.c.latest_at.desc()).offset((page - 1) * page_size).limit(page_size)
+    ).all()
+    return [(r[0], r[1]) for r in rows], total

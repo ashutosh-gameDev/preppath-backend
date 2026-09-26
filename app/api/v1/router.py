@@ -3,11 +3,13 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     attempts,
     auth,
+    bookmarks,
     courses,
     dev_auth,
     enrollments,
     jobs,
     leaderboard,
+    mistakes,
     notes,
     notifications,
     practice,
@@ -49,6 +51,8 @@ api_router.include_router(profile.router)
 api_router.include_router(notifications.router)
 api_router.include_router(jobs.router)
 api_router.include_router(notes.router)
+api_router.include_router(mistakes.router)
+api_router.include_router(bookmarks.router)
 api_router.include_router(tools.router)
 api_router.include_router(premium.router)
 api_router.include_router(dev_auth.router)  # 404s unless ENVIRONMENT=development
