@@ -29,10 +29,6 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
 
     for course_in in payload.courses:
         course = _find_by_name_ci(db, Course, course_in.name)
-        # A course created here already published takes its whole imported
-        # syllabus live with it (mirrors publishing a course in the CRM).
-        # An existing course is only extended - its new items keep their own flags.
-        publish_children = course is None and course_in.is_published
         if course is None:
             course = Course(
                 name=course_in.name.strip(),
@@ -46,6 +42,13 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
             courses_created += 1
         else:
             courses_skipped.append(course_in.name)
+
+        # Whatever gets created under a published course goes live with it -
+        # students only see published syllabus items, so a published course
+        # whose new subjects/chapters stayed drafts would look like the
+        # upload "didn't update". (Publishing a draft course later publishes
+        # everything under it, see course_service.publish_course_tree.)
+        publish_children = course.is_published
 
         for subject_in in course_in.subjects:
             subject = _find_by_name_ci(db, Subject, subject_in.name, course_id=course.id)
