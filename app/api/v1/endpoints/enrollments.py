@@ -18,7 +18,7 @@ from app.models.enums import ContentStatus
 from app.models.question import Question
 from app.models.user import Profile, User
 from app.schemas.common import Message
-from app.schemas.enrollment import EnrolledCourseOut, EnrollRequest
+from app.schemas.enrollment import EnrolledCourseOut, EnrollmentUpdate, EnrollRequest
 from app.services.premium_service import is_premium
 
 # Normal tier: one course at a time. Pro/Premium: unlimited courses - see
@@ -66,9 +66,26 @@ def list_my_enrollments(user: User = Depends(get_current_user), db: Session = De
                 questions_attempted=answered_row,
                 accuracy=accuracy,
                 progress_pct=min(100.0, progress_pct),
+                target_exam_date=e.target_exam_date,
             )
         )
     return out
+
+
+@router.patch("/{course_id}", response_model=Message)
+def update_enrollment(
+    course_id: uuid.UUID, payload: EnrollmentUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Currently just the exam-countdown date shown on Home."""
+    enrollment = db.execute(
+        select(CourseEnrollment).where(CourseEnrollment.user_id == user.id, CourseEnrollment.course_id == course_id)
+    ).scalar_one_or_none()
+    if enrollment is None:
+        raise HTTPException(status_code=404, detail="Not enrolled in this course")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(enrollment, field, value)
+    db.flush()
+    return Message(detail="Updated")
 
 
 @router.post("", response_model=Message)

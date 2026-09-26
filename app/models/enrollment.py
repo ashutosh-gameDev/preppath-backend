@@ -1,6 +1,7 @@
 import uuid
+from datetime import date
 
-from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy import Date, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,5 +25,8 @@ class CourseEnrollment(Base, UUIDPKMixin, TimestampMixin):
     course_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Optional - the Home page's exam-countdown card. Null until the student
+    # sets one; purely informational, doesn't gate anything.
+    target_exam_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     course = relationship("Course")
