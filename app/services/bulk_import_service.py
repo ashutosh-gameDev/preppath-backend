@@ -5,6 +5,7 @@ rows (see BulkImportPreview docstring for why no server-side cache is used).
 """
 import csv
 import io
+import re
 import uuid
 
 import openpyxl
@@ -29,8 +30,31 @@ FORMAT_VALUES = {"mcq", "fill_blank"}
 # frontend's "what columns are optional" copy/template stays accurate.
 OPTIONAL_COLUMNS = [
     "course", "subject", "explanation", "topic", "subtopic", "exam", "year", "difficulty",
-    "type", "source", "language", "tags", "format",
+    "type", "source", "language", "tags", "format", "needs_image", "image_note",
 ]
+
+_TRUE_VALUES = {"true", "1", "yes", "y"}
+
+# Catches text referencing a picture the row doesn't actually include (a PDF
+# extraction routinely drops these) - "refer to the diagram below", "as shown
+# in the figure", "given below" near a figure/table/graph/map/chart, etc.
+# Used only as a FALLBACK, for rows that don't set `needs_image` themselves
+# (e.g. the AI-prompt flow in the CRM sets it directly instead - see
+# app/(app)/questions/import/page.tsx's buildPrompt).
+_IMAGE_REFERENCE_RE = re.compile(
+    r"\b(figure|diagram|image|graph|chart|map|table)\b.{0,25}\b(below|above|shown|given)\b"
+    r"|\b(shown|given)\b.{0,15}\b(figure|diagram|image|graph|chart|map|table)\b"
+    r"|\bas per the\b.{0,15}\b(figure|diagram|image|graph|chart|map|table)\b",
+    re.IGNORECASE,
+)
+
+
+def _parse_bool(v: str) -> bool:
+    return v.strip().lower() in _TRUE_VALUES
+
+
+def _looks_like_it_needs_an_image(*texts: str) -> bool:
+    return any(_IMAGE_REFERENCE_RE.search(t) for t in texts if t)
 
 
 def _parse_csv(raw: bytes) -> list[dict]:
@@ -192,14 +216,29 @@ def validate_rows(
         try:
             language_raw = str(row.get("language", "")).strip()
             tags_raw = str(row.get("tags", "")).strip()
+            question_text = str(row["question"]).strip()
+            needs_image_raw = str(row.get("needs_image", "")).strip()
+            image_note = str(row.get("image_note") or "").strip() or None
+            # An explicit column always wins; otherwise fall back to scanning
+            # the question + option text for an unincluded figure reference.
+            needs_image = (
+                _parse_bool(needs_image_raw)
+                if needs_image_raw
+                else _looks_like_it_needs_an_image(
+                    question_text, str(row.get("option_a") or ""), str(row.get("option_b") or ""),
+                    str(row.get("option_c") or ""), str(row.get("option_d") or ""),
+                )
+            )
             common = dict(
-                question_text=str(row["question"]).strip(),
+                question_text=question_text,
                 explanation=str(row.get("explanation") or "").strip() or None,
                 difficulty=(str(row.get("difficulty") or "").strip().lower() or defaults.difficulty or "medium"),
                 question_type=(str(row.get("type") or "").strip().lower() or defaults.question_type or "practice"),
                 pyq_paper_id=pyq_paper_id,
                 language=language_raw or defaults.language,
                 tags=[t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else [],
+                needs_image=needs_image,
+                image_note=image_note,
                 course_id=course.id,
                 subject_id=subject.id,
                 topic_id=topic.id if topic else None,

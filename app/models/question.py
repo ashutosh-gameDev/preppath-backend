@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, Sequence, String, Table, Text, text
+from sqlalchemy import Boolean, CheckConstraint, Column, ForeignKey, Integer, Sequence, String, Table, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -122,6 +122,16 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     # Independent of `pyq_paper_id` - a question's own language, not the paper's.
     language: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=ContentStatus.DRAFT, nullable=False, index=True)
+
+    # Set when a bulk import (or an admin by hand) noticed the source
+    # material references a picture that isn't attached yet - e.g. "refer to
+    # the diagram below" with no diagram. `image_note` is a short reminder of
+    # what's missing. Lets the CRM filter straight to these instead of an
+    # admin re-reading every question to find the ones missing a picture.
+    # Cleared automatically the moment an image is actually added - see
+    # admin/questions.py.
+    needs_image: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    image_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

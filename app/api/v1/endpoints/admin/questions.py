@@ -31,6 +31,24 @@ from app.services.admin_log_service import log_action
 
 router = APIRouter(prefix="/admin/questions", tags=["admin:questions"])
 
+# A question's five image slots - used to auto-clear `needs_image` the moment
+# any one of them goes from empty to filled in the same edit (see _apply_patch).
+IMAGE_FIELDS = ("image_url", "option_a_image", "option_b_image", "option_c_image", "option_d_image")
+
+
+def _apply_patch(question: Question, data: dict) -> None:
+    """Applies a QuestionUpdate's changed fields to `question`. Unless this
+    same edit explicitly touches `needs_image` itself, clears that flag the
+    moment any image field goes from empty to filled - the flag's whole job
+    is "find the question missing a picture", so once one is added it has
+    done its job. Shared by the single-question and bulk-update endpoints so
+    both behave the same way."""
+    previously_empty_images = [f for f in IMAGE_FIELDS if f in data and not getattr(question, f)]
+    for field, value in data.items():
+        setattr(question, field, value)
+    if "needs_image" not in data and question.needs_image and any(getattr(question, f) for f in previously_empty_images):
+        question.needs_image = False
+
 
 def _scope_own(q, admin: User):
     """Content editors and admins only ever see/touch questions they
@@ -79,6 +97,7 @@ def list_questions(
     question_type: str | None = None,
     question_format: str | None = None,
     status: str | None = None,
+    needs_image: bool | None = Query(None, description="Only questions flagged as missing a picture (or, set false, only the rest)"),
     search: str | None = None,
     display_number: int | None = Query(None, description="Exact match on the short question # (e.g. 1042)"),
     page: int = Query(1, ge=1),
@@ -109,6 +128,8 @@ def list_questions(
         q = q.where(Question.question_format == question_format)
     if status:
         q = q.where(Question.status == status)
+    if needs_image is not None:
+        q = q.where(Question.needs_image.is_(needs_image))
     if display_number:
         q = q.where(Question.display_number == display_number)
     if search:
@@ -142,8 +163,7 @@ def create_question(payload: QuestionCreate, admin: User = Depends(require_conte
 def update_question(question_id: uuid.UUID, payload: QuestionUpdate, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
     question = _require_owned(db.get(Question, question_id), admin)
     data = payload.model_dump(exclude_unset=True, exclude={"tags"})
-    for field, value in data.items():
-        setattr(question, field, value)
+    _apply_patch(question, data)
     if payload.tags is not None:
         question.tags = _get_or_create_tags(db, payload.tags)
     db.flush()
@@ -260,8 +280,7 @@ def bulk_update_questions(
     tags = _get_or_create_tags(db, payload.patch.tags) if payload.patch.tags is not None else None
     updated = 0
     for question in questions:
-        for field, value in data.items():
-            setattr(question, field, value)
+        _apply_patch(question, data)
         if tags is not None:
             question.tags = tags
         updated += 1

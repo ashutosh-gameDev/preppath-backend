@@ -40,6 +40,9 @@ class QuestionBase(ORMModel):
     # same reasoning as question_type. e.g. "English", "Hindi".
     language: str | None = None
     tags: list[str] = []
+    # See models/question.py for what this is and how it gets cleared.
+    needs_image: bool = False
+    image_note: str | None = None
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -141,6 +144,8 @@ class QuestionUpdate(ORMModel):
     question_type: str | None = None
     language: str | None = None
     tags: list[str] | None = None
+    needs_image: bool | None = None
+    image_note: str | None = None
     course_id: uuid.UUID | None = None
     subject_id: uuid.UUID | None = None
     topic_id: uuid.UUID | None = None
