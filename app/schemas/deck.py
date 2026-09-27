@@ -160,8 +160,17 @@ class FillBlankBlock(LenientBlock):
 
 
 class SliderBlock(LenientBlock):
+    """min/max/step/unit/target are optional so older/lenient content (no
+    concrete example existed for this block when it was first added) still
+    validates - the student renderer falls back to a 0-100 illustrative
+    range when they're absent."""
     type: Literal["slider"]
     question: str | None = None
+    min: float = 0
+    max: float = 100
+    step: float = 1
+    unit: str | None = None
+    target: float | None = None
 
 
 class HotspotBlock(LenientBlock):
@@ -169,14 +178,29 @@ class HotspotBlock(LenientBlock):
     image: str | None = None
 
 
+class TimelineEvent(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    date: str | None = None
+    label: str
+    content: str | None = None
+
+
 class TimelineBlock(LenientBlock):
     type: Literal["timeline"]
     title: str | None = None
+    events: list[TimelineEvent] = []
+
+
+class CompareColumn(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    title: str
+    points: list[str] = []
 
 
 class CompareBlock(LenientBlock):
     type: Literal["compare"]
     title: str | None = None
+    columns: list[CompareColumn] = []
 
 
 class PyqBlock(LenientBlock):

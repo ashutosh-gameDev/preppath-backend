@@ -36,14 +36,7 @@ TOOLS = [
         "name": "Notes",
         "description": "Jot down quick notes per topic.",
         "icon": "notebook",
-        "available": False,
-    },
-    {
-        "key": "flashcards",
-        "name": "Study Bite",
-        "description": "Spaced-repetition flashcards.",
-        "icon": "layers",
-        "available": False,
+        "available": True,
     },
     {
         "key": "study-planner",
