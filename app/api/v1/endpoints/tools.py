@@ -40,7 +40,7 @@ TOOLS = [
     },
     {
         "key": "flashcards",
-        "name": "Flashcards",
+        "name": "Study Bite",
         "description": "Spaced-repetition flashcards.",
         "icon": "layers",
         "available": False,

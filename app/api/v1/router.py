@@ -5,6 +5,7 @@ from app.api.v1.endpoints import (
     auth,
     bookmarks,
     courses,
+    decks,
     dev_auth,
     enrollments,
     jobs,
@@ -25,6 +26,7 @@ from app.api.v1.endpoints.admin import (
     backup as admin_backup,
     courses as admin_courses,
     dashboard as admin_dashboard,
+    decks as admin_decks,
     job_postings as admin_job_postings,
     pyq_papers as admin_pyq_papers,
     questions as admin_questions,
@@ -40,6 +42,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(courses.router)
+api_router.include_router(decks.router)
 api_router.include_router(enrollments.router)
 api_router.include_router(practice.router)
 api_router.include_router(tests.router)
@@ -62,6 +65,7 @@ api_router.include_router(admin_dashboard.router)
 api_router.include_router(admin_backup.router)
 api_router.include_router(admin_courses.router)
 api_router.include_router(admin_questions.router)
+api_router.include_router(admin_decks.router)
 api_router.include_router(admin_pyq_papers.router)
 api_router.include_router(admin_job_postings.router)
 api_router.include_router(admin_tests.router)
