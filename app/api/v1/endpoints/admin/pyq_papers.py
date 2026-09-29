@@ -8,12 +8,12 @@ question upload.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_content_access
 from app.db.session import get_db
-from app.models.enums import UserRole
+from app.models.enums import ContentStatus, UserRole
 from app.models.pyq_paper import PYQPaper
 from app.models.question import Question
 from app.models.user import User
@@ -22,6 +22,20 @@ from app.schemas.pyq_paper import PYQPaperCreate, PYQPaperOut, PYQPaperUpdate
 from app.services.admin_log_service import log_action
 
 router = APIRouter(prefix="/admin/pyq-papers", tags=["admin:pyq-papers"])
+
+
+def publish_paper_questions(db: Session, paper_id: uuid.UUID) -> int:
+    """Publishing a paper is meant to make it (and everything in it) visible
+    to students - a paper whose questions were still sitting in Draft would
+    quietly exclude them from ordinary Practice/stats even though PYQ itself
+    already shows them. Only flips DRAFT -> PUBLISHED; a question someone
+    archived on purpose is left alone. Returns how many were switched."""
+    result = db.execute(
+        update(Question)
+        .where(Question.pyq_paper_id == paper_id, Question.status == ContentStatus.DRAFT)
+        .values(status=ContentStatus.PUBLISHED)
+    )
+    return result.rowcount or 0
 
 
 def _to_out(paper: PYQPaper, count: int) -> PYQPaperOut:
@@ -79,7 +93,15 @@ def update_pyq_paper(
         if admin.role != UserRole.SUPER_ADMIN:
             raise HTTPException(status_code=403, detail="Only a super admin can publish or unpublish a paper.")
         paper.is_published = publish
-        log_action(db, admin.id, "publish" if publish else "unpublish", "pyq_paper", paper.id)
+        extra = None
+        if publish:
+            # Only the draft -> published transition cascades, same rule as
+            # publishing a course - saving an already-published paper never
+            # re-publishes a question someone deliberately archived.
+            published_count = publish_paper_questions(db, paper.id)
+            if published_count:
+                extra = {"published_questions": published_count}
+        log_action(db, admin.id, "publish" if publish else "unpublish", "pyq_paper", paper.id, extra)
     for field, value in changes.items():
         setattr(paper, field, value)
     db.flush()
