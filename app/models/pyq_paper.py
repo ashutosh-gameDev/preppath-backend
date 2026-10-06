@@ -37,7 +37,16 @@ class PYQPaper(Base, UUIDPKMixin, TimestampMixin):
     # Students only see published papers; only a super admin flips this.
     is_published: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
 
+    # Who created this paper tag - same ownership-scoping role as
+    # Question.created_by (see admin/pyq_papers.py's _scope_own/_require_owned).
+    # Nullable: legacy rows predating this column, backfilled from their
+    # questions' created_by where possible, stay NULL when that's unknown too.
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     course = relationship("Course")
+    created_by_user = relationship("User")
 
     @property
     def display_name(self) -> str:
@@ -47,3 +56,12 @@ class PYQPaper(Base, UUIDPKMixin, TimestampMixin):
         if self.label:
             parts.append(self.label)
         return " ".join(parts)
+
+    @property
+    def uploaded_by(self) -> str | None:
+        """Same resolution as Question.uploader_label - username, else full
+        name, else email. None if unset or the account was since deleted."""
+        u = self.created_by_user
+        if not u:
+            return None
+        return u.username or u.full_name or u.email

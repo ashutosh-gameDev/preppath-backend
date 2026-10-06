@@ -24,6 +24,23 @@ from app.services.admin_log_service import log_action
 router = APIRouter(prefix="/admin/pyq-papers", tags=["admin:pyq-papers"])
 
 
+def _scope_own(q, admin: User):
+    """Same ownership rule as admin/questions.py's _scope_own: a team member
+    only sees/touches papers they created themselves - only super_admin sees
+    every paper."""
+    if admin.role != UserRole.SUPER_ADMIN:
+        q = q.where(PYQPaper.created_by == admin.id)
+    return q
+
+
+def _require_owned(paper: PYQPaper | None, admin: User) -> PYQPaper:
+    """Same rule as _scope_own, for the single-row endpoints that fetch by id
+    directly - 404 (not 403) so a non-owner can't tell whether the id exists."""
+    if paper is None or (admin.role != UserRole.SUPER_ADMIN and paper.created_by != admin.id):
+        raise HTTPException(status_code=404, detail="PYQ paper not found")
+    return paper
+
+
 def publish_paper_questions(db: Session, paper_id: uuid.UUID) -> int:
     """Publishing a paper is meant to make it (and everything in it) visible
     to students - a paper whose questions were still sitting in Draft would
@@ -42,6 +59,7 @@ def _to_out(paper: PYQPaper, count: int) -> PYQPaperOut:
     return PYQPaperOut(
         id=paper.id, exam_name=paper.exam_name, year=paper.year, label=paper.label, language=paper.language,
         course_id=paper.course_id, is_published=paper.is_published, created_at=paper.created_at, question_count=count,
+        uploaded_by=paper.uploaded_by,
     )
 
 
@@ -57,6 +75,7 @@ def list_pyq_papers(
         q = q.where(PYQPaper.course_id == course_id)
     if search:
         q = q.where(PYQPaper.exam_name.ilike(f"%{search}%"))
+    q = _scope_own(q, admin)
     papers = db.execute(q.order_by(PYQPaper.year.desc().nullslast(), PYQPaper.exam_name)).scalars().all()
     if not papers:
         return []
@@ -73,7 +92,7 @@ def list_pyq_papers(
 
 @router.post("", response_model=PYQPaperOut)
 def create_pyq_paper(payload: PYQPaperCreate, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
-    paper = PYQPaper(**payload.model_dump())
+    paper = PYQPaper(**payload.model_dump(), created_by=admin.id)
     db.add(paper)
     db.flush()
     log_action(db, admin.id, "create", "pyq_paper", paper.id)
@@ -84,9 +103,7 @@ def create_pyq_paper(payload: PYQPaperCreate, admin: User = Depends(require_cont
 def update_pyq_paper(
     paper_id: uuid.UUID, payload: PYQPaperUpdate, admin: User = Depends(require_content_access), db: Session = Depends(get_db)
 ):
-    paper = db.get(PYQPaper, paper_id)
-    if paper is None:
-        raise HTTPException(status_code=404, detail="PYQ paper not found")
+    paper = _require_owned(db.get(PYQPaper, paper_id), admin)
     changes = payload.model_dump(exclude_unset=True)
     publish = changes.pop("is_published", None)
     if publish is not None and publish != paper.is_published:
@@ -113,9 +130,7 @@ def update_pyq_paper(
 
 @router.delete("/{paper_id}", response_model=Message)
 def delete_pyq_paper(paper_id: uuid.UUID, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
-    paper = db.get(PYQPaper, paper_id)
-    if paper is None:
-        raise HTTPException(status_code=404, detail="PYQ paper not found")
+    paper = _require_owned(db.get(PYQPaper, paper_id), admin)
     # Questions tagged to it are NOT deleted (pyq_paper_id just goes NULL via
     # the ON DELETE SET NULL FK) - deleting a paper is a labeling cleanup,
     # never a way to bulk-delete questions.

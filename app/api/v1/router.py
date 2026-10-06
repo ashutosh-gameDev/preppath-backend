@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    ads,
     attempts,
     auth,
     bookmarks,
@@ -23,6 +24,7 @@ from app.api.v1.endpoints import (
     users,
 )
 from app.api.v1.endpoints.admin import (
+    ads as admin_ads,
     backup as admin_backup,
     courses as admin_courses,
     dashboard as admin_dashboard,
@@ -58,11 +60,13 @@ api_router.include_router(mistakes.router)
 api_router.include_router(bookmarks.router)
 api_router.include_router(tools.router)
 api_router.include_router(premium.router)
+api_router.include_router(ads.router)
 api_router.include_router(dev_auth.router)  # 404s unless ENVIRONMENT=development
 
 # Admin-only
 api_router.include_router(admin_dashboard.router)
 api_router.include_router(admin_backup.router)
+api_router.include_router(admin_ads.router)
 api_router.include_router(admin_courses.router)
 api_router.include_router(admin_questions.router)
 api_router.include_router(admin_decks.router)

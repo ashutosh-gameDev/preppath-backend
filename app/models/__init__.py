@@ -19,6 +19,7 @@ from app.models.job_posting import JobPosting  # noqa: F401
 from app.models.notes import NoteCategory, NotePage  # noqa: F401
 from app.models.admin import Report, AdminActivityLog, PlatformSetting  # noqa: F401
 from app.models.deck import Deck  # noqa: F401
+from app.models.ad import Ad, AdEvent  # noqa: F401
 
 __all__ = [
     "Base",
@@ -51,4 +52,6 @@ __all__ = [
     "AdminActivityLog",
     "PlatformSetting",
     "Deck",
+    "Ad",
+    "AdEvent",
 ]

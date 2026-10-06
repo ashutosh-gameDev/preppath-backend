@@ -35,6 +35,9 @@ class PYQPaperOut(ORMModel):
     # form/bulk-edit picker and the test builder's "load from paper" list
     # show which papers actually have content without a second request.
     question_count: int = 0
+    # Who created this paper tag - None for legacy rows with no known
+    # uploader, or if the uploader account was since deleted.
+    uploaded_by: str | None = None
 
 
 class PYQPaperStudentOut(ORMModel):
