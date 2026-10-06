@@ -52,14 +52,14 @@ def _safe_filename(original_name: str) -> str:
     return f"{uuid.uuid4().hex}{ext}"
 
 
-def upload_question_image(content: bytes, filename: str, content_type: str) -> str:
+def _upload(content: bytes, filename: str, content_type: str, folder: str) -> str:
     if content_type not in ALLOWED_CONTENT_TYPES:
         raise UploadError(f"Unsupported image type: {content_type}")
     if len(content) > MAX_UPLOAD_BYTES:
         raise UploadError("Image must be 5MB or smaller")
 
     safe_name = _safe_filename(filename)
-    object_path = f"questions/{safe_name}"
+    object_path = f"{folder}/{safe_name}"
 
     if _supabase_storage_configured():
         url = f"{settings.SUPABASE_URL}/storage/v1/object/{settings.SUPABASE_STORAGE_BUCKET}/{object_path}"
@@ -88,3 +88,11 @@ def upload_question_image(content: bytes, filename: str, content_type: str) -> s
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(content)
     return f"{settings.PUBLIC_BASE_URL}/uploads/{object_path}"
+
+
+def upload_question_image(content: bytes, filename: str, content_type: str) -> str:
+    return _upload(content, filename, content_type, "questions")
+
+
+def upload_ad_image(content: bytes, filename: str, content_type: str) -> str:
+    return _upload(content, filename, content_type, "ads")

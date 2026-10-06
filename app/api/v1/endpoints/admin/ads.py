@@ -6,7 +6,7 @@ accounts can't touch this.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -16,9 +16,20 @@ from app.models.ad import Ad, AdEvent
 from app.models.user import User
 from app.schemas.ad import AdCreate, AdOut, AdUpdate
 from app.schemas.common import Message
+from app.services import storage_service
 from app.services.admin_log_service import log_action
 
 router = APIRouter(prefix="/admin/ads", tags=["admin:ads"])
+
+
+@router.post("/upload-image")
+async def upload_ad_image(file: UploadFile, admin: User = Depends(require_admin)):
+    content = await file.read()
+    try:
+        url = storage_service.upload_ad_image(content, file.filename or "image.jpg", file.content_type or "")
+    except storage_service.UploadError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"url": url}
 
 
 def _to_out(ad: Ad, impressions: int, clicks: int) -> AdOut:
