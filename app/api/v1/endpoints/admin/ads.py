@@ -8,11 +8,12 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.ad import Ad, AdEvent
+from app.models.course import Course
 from app.models.user import User
 from app.schemas.ad import AdCreate, AdOut, AdUpdate
 from app.schemas.common import Message
@@ -37,8 +38,16 @@ def _to_out(ad: Ad, impressions: int, clicks: int) -> AdOut:
     return AdOut(
         id=ad.id, title=ad.title, image_url=ad.image_url, link_url=ad.link_url, body_text=ad.body_text,
         placement=ad.placement, priority=ad.priority, is_active=ad.is_active, starts_at=ad.starts_at,
-        ends_at=ad.ends_at, created_at=ad.created_at, impressions=impressions, clicks=clicks, ctr=round(ctr, 2),
+        ends_at=ad.ends_at, created_at=ad.created_at, course_ids=[c.id for c in ad.courses],
+        impressions=impressions, clicks=clicks, ctr=round(ctr, 2),
     )
+
+
+def _set_courses(db: Session, ad: Ad, course_ids: list[uuid.UUID]) -> None:
+    if not course_ids:
+        ad.courses = []
+        return
+    ad.courses = db.execute(select(Course).where(Course.id.in_(course_ids))).scalars().all()
 
 
 @router.get("", response_model=list[AdOut])
@@ -48,7 +57,7 @@ def list_ads(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    q = select(Ad)
+    q = select(Ad).options(selectinload(Ad.courses))
     if placement:
         q = q.where(Ad.placement == placement)
     if is_active is not None:
@@ -73,8 +82,11 @@ def list_ads(
 
 @router.post("", response_model=AdOut)
 def create_ad(payload: AdCreate, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    ad = Ad(**payload.model_dump(), created_by=admin.id)
+    data = payload.model_dump(exclude={"course_ids"})
+    ad = Ad(**data, created_by=admin.id)
     db.add(ad)
+    db.flush()
+    _set_courses(db, ad, payload.course_ids)
     db.flush()
     log_action(db, admin.id, "create", "ad", ad.id)
     return _to_out(ad, 0, 0)
@@ -85,8 +97,11 @@ def update_ad(ad_id: uuid.UUID, payload: AdUpdate, admin: User = Depends(require
     ad = db.get(Ad, ad_id)
     if ad is None:
         raise HTTPException(status_code=404, detail="Ad not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True, exclude={"course_ids"})
+    for field, value in data.items():
         setattr(ad, field, value)
+    if payload.course_ids is not None:
+        _set_courses(db, ad, payload.course_ids)
     db.flush()
     log_action(db, admin.id, "update", "ad", ad.id)
 

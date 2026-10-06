@@ -1,11 +1,18 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
+
+ad_courses = Table(
+    "ad_courses",
+    Base.metadata,
+    Column("ad_id", UUID(as_uuid=True), ForeignKey("ads.id", ondelete="CASCADE"), primary_key=True),
+    Column("course_id", UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class Ad(Base, UUIDPKMixin, TimestampMixin):
@@ -16,6 +23,11 @@ class Ad(Base, UUIDPKMixin, TimestampMixin):
     `placement` is free text, not an enum, matching the extensibility
     reasoning used for Question.language/question_type: a new slot never
     needs a migration, just a new `slot="..."` call site.
+
+    `courses` targets the ad to one or more specific courses (e.g. an SSC
+    CGL coaching ad shown only to SSC CGL students) - an empty list means
+    untargeted, shown regardless of course, same "empty/null = no
+    restriction" convention as JobPosting.course_id.
     """
     __tablename__ = "ads"
 
@@ -34,6 +46,7 @@ class Ad(Base, UUIDPKMixin, TimestampMixin):
     )
 
     created_by_user = relationship("User")
+    courses = relationship("Course", secondary=ad_courses)
 
 
 class AdEvent(Base, UUIDPKMixin):

@@ -15,6 +15,8 @@ class AdCreate(ORMModel):
     is_active: bool = True
     starts_at: datetime | None = None
     ends_at: datetime | None = None
+    # Empty = untargeted, shown regardless of course.
+    course_ids: list[uuid.UUID] = []
 
 
 class AdUpdate(ORMModel):
@@ -27,6 +29,7 @@ class AdUpdate(ORMModel):
     is_active: bool | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
+    course_ids: list[uuid.UUID] | None = None
 
 
 class AdOut(ORMModel):
@@ -41,6 +44,7 @@ class AdOut(ORMModel):
     starts_at: datetime | None
     ends_at: datetime | None
     created_at: datetime
+    course_ids: list[uuid.UUID] = []
     # Computed from ad_events - see admin/ads.py.
     impressions: int = 0
     clicks: int = 0
