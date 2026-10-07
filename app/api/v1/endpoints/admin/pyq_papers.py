@@ -8,7 +8,7 @@ question upload.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_content_access
@@ -67,6 +67,8 @@ def _to_out(paper: PYQPaper, count: int) -> PYQPaperOut:
 def list_pyq_papers(
     course_id: uuid.UUID | None = None,
     search: str | None = None,
+    is_published: bool | None = None,
+    year: int | None = None,
     admin: User = Depends(require_content_access),
     db: Session = Depends(get_db),
 ):
@@ -74,7 +76,11 @@ def list_pyq_papers(
     if course_id:
         q = q.where(PYQPaper.course_id == course_id)
     if search:
-        q = q.where(PYQPaper.exam_name.ilike(f"%{search}%"))
+        q = q.where(or_(PYQPaper.exam_name.ilike(f"%{search}%"), PYQPaper.label.ilike(f"%{search}%")))
+    if is_published is not None:
+        q = q.where(PYQPaper.is_published.is_(is_published))
+    if year is not None:
+        q = q.where(PYQPaper.year == year)
     q = _scope_own(q, admin)
     papers = db.execute(q.order_by(PYQPaper.year.desc().nullslast(), PYQPaper.exam_name)).scalars().all()
     if not papers:
