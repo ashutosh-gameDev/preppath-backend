@@ -103,6 +103,7 @@ class NotificationType(StrEnum):
     ACHIEVEMENT = "achievement"
     SYSTEM = "system"
     LEADERBOARD = "leaderboard"
+    JOB_POSTING = "job_posting"
 
 
 class LeaderboardScope(StrEnum):

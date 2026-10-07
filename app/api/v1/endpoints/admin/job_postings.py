@@ -16,6 +16,7 @@ from app.models.user import User
 from app.schemas.common import Message
 from app.schemas.job_posting import JobPostingCreate, JobPostingOut, JobPostingUpdate
 from app.services.admin_log_service import log_action
+from app.services.notification_service import notify_eligible_students_for_job
 
 router = APIRouter(prefix="/admin/job-postings", tags=["admin:job-postings"])
 
@@ -41,6 +42,8 @@ def create_job_posting(
     db.add(posting)
     db.flush()
     log_action(db, admin.id, "create", "job_posting", posting.id)
+    if posting.is_published:
+        notify_eligible_students_for_job(db, posting)
     return posting
 
 
@@ -54,10 +57,16 @@ def update_job_posting(
     posting = db.get(JobPosting, posting_id)
     if posting is None:
         raise HTTPException(status_code=404, detail="Job posting not found")
+    was_published = posting.is_published
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(posting, field, value)
     db.flush()
     log_action(db, admin.id, "update", "job_posting", posting.id)
+    # Only the draft -> published transition notifies - saving an already-
+    # published posting again (e.g. fixing a typo) must never re-notify
+    # every eligible student.
+    if posting.is_published and not was_published:
+        notify_eligible_students_for_job(db, posting)
     return posting
 
 
