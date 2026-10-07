@@ -17,12 +17,13 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import Date, case, func, select
+from sqlalchemy import Date, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.attempt import Attempt
 from app.models.course import Subject, Topic
 from app.models.gamification import XPTransaction
+from app.models.mistake_dismissal import MistakeDismissal
 from app.models.question import Question
 from app.models.test import Test, TestAttempt
 from app.services.settings_service import get_setting
@@ -353,7 +354,12 @@ def latest_wrong_attempts(
     """The Mistake Book: every question whose MOST RECENT attempt by this
     student was wrong. Re-answering it correctly later removes it from this
     list automatically (the "most recent" attempt is now a correct one) -
-    no separate resolved/unresolved flag to maintain."""
+    no separate resolved/unresolved flag to maintain.
+
+    A student can also manually dismiss one (MistakeDismissal) without
+    re-answering it - that only hides it until the NEXT wrong attempt makes
+    `latest_at` move past `dismissed_at` again, so dismissing is "I've seen
+    this", not "stop tracking this question forever"."""
     latest_per_question = (
         select(Attempt.question_id, func.max(Attempt.attempted_at).label("latest_at"))
         .where(Attempt.user_id == user_id)
@@ -368,7 +374,15 @@ def latest_wrong_attempts(
             & (Attempt.attempted_at == latest_per_question.c.latest_at),
         )
         .join(Question, Question.id == Attempt.question_id)
-        .where(Attempt.user_id == user_id, Attempt.is_correct.is_(False))
+        .outerjoin(
+            MistakeDismissal,
+            (MistakeDismissal.question_id == Attempt.question_id) & (MistakeDismissal.user_id == user_id),
+        )
+        .where(
+            Attempt.user_id == user_id,
+            Attempt.is_correct.is_(False),
+            or_(MistakeDismissal.id.is_(None), MistakeDismissal.dismissed_at < latest_per_question.c.latest_at),
+        )
     )
     total = db.execute(select(func.count()).select_from(q.subquery())).scalar_one()
     rows = db.execute(

@@ -20,6 +20,7 @@ from app.models.notes import NoteCategory, NotePage  # noqa: F401
 from app.models.admin import Report, AdminActivityLog, PlatformSetting  # noqa: F401
 from app.models.deck import Deck  # noqa: F401
 from app.models.ad import Ad, AdEvent  # noqa: F401
+from app.models.mistake_dismissal import MistakeDismissal  # noqa: F401
 
 __all__ = [
     "Base",
@@ -54,4 +55,5 @@ __all__ = [
     "Deck",
     "Ad",
     "AdEvent",
+    "MistakeDismissal",
 ]
