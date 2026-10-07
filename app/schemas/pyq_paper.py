@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from app.schemas.common import ORMModel
+from app.schemas.question import QuestionReviewOut
 
 
 class PYQPaperCreate(ORMModel):
@@ -56,3 +57,26 @@ class PYQPaperStudentOut(ORMModel):
 
 class PYQPaperProgressOut(ORMModel):
     attempted_ids: list[uuid.UUID]
+
+
+class PyqAnswerIn(ORMModel):
+    question_id: uuid.UUID
+    selected_option: str | None = None  # null = skipped
+    time_taken_seconds: int = 0
+
+
+class PyqSubmitRequest(ORMModel):
+    """One shot for the whole paper - the attempt page holds every answer in
+    local state (no per-question network call) and only talks to the
+    server here. Unlike a Test, there's no persisted "attempt" row to start
+    first - a PYQ paper's questions are already fetched, answer-free, from
+    GET /pyq/papers/{id}/questions."""
+    answers: list[PyqAnswerIn]
+
+
+class PyqSubmitResult(ORMModel):
+    correct_count: int
+    incorrect_count: int
+    skipped_count: int
+    accuracy: float
+    review: list[QuestionReviewOut]

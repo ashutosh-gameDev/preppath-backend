@@ -16,16 +16,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import distinct, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_active_profile, get_current_user
 from app.db.session import get_db
 from app.models.attempt import Attempt
 from app.models.enrollment import CourseEnrollment
 from app.models.enums import ContentStatus
 from app.models.pyq_paper import PYQPaper
 from app.models.question import Question
-from app.models.user import User
-from app.schemas.pyq_paper import PYQPaperProgressOut, PYQPaperStudentOut
-from app.schemas.question import QuestionAttemptOut
+from app.models.user import Profile, User
+from app.schemas.pyq_paper import PYQPaperProgressOut, PYQPaperStudentOut, PyqSubmitRequest, PyqSubmitResult
+from app.schemas.question import QuestionAttemptOut, QuestionReviewOut
+from app.services.attempt_service import record_practice_answer
 
 router = APIRouter(prefix="/pyq", tags=["pyq"])
 
@@ -121,14 +122,84 @@ def list_course_papers(course_id: uuid.UUID, user: User = Depends(get_current_us
     ]
 
 
+@router.get("/papers/{paper_id}", response_model=PYQPaperStudentOut)
+def get_paper_detail(paper_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Paper metadata for the landing page (name, question count, progress) -
+    the questions themselves are fetched separately, see below."""
+    paper, course_id = _get_visible_paper(db, user, paper_id)
+    question_count = db.execute(
+        select(func.count(Question.id)).where(Question.pyq_paper_id == paper.id, _VISIBLE)
+    ).scalar() or 0
+    attempted_count = db.execute(
+        select(func.count(distinct(Attempt.question_id)))
+        .join(Question, Question.id == Attempt.question_id)
+        .where(Attempt.user_id == user.id, Question.pyq_paper_id == paper.id, _VISIBLE)
+    ).scalar() or 0
+    return PYQPaperStudentOut(
+        id=paper.id,
+        name=paper.display_name,
+        exam_name=paper.exam_name,
+        year=paper.year,
+        label=paper.label,
+        language=paper.language,
+        course_id=course_id,
+        question_count=question_count,
+        attempted_count=attempted_count,
+    )
+
+
 @router.get("/papers/{paper_id}/questions", response_model=list[QuestionAttemptOut])
 def get_paper_questions(paper_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """The paper's questions in upload order, without answers - those come back
-    per question from POST /practice/answer."""
+    """The paper's questions in upload order, without answers - fetched once
+    and held client-side for the whole attempt (cached 60min, see
+    student-web's api.ts); answers only go back to the server in one shot,
+    via POST /papers/{paper_id}/submit below."""
     paper, _ = _get_visible_paper(db, user, paper_id)
     return db.execute(
         select(Question).where(Question.pyq_paper_id == paper.id, _VISIBLE).order_by(Question.display_number)
     ).scalars().all()
+
+
+@router.post("/papers/{paper_id}/submit", response_model=PyqSubmitResult)
+def submit_paper(
+    paper_id: uuid.UUID,
+    payload: PyqSubmitRequest,
+    user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_active_profile),
+    db: Session = Depends(get_db),
+):
+    """Records every answer in one request (each via the same
+    record_practice_answer /practice/answer already uses, so XP/stats/
+    Mistake Book all stay consistent) instead of one call per question -
+    no persisted "attempt" row to start first, unlike a Test, since a PYQ
+    paper is always the same fixed set of already-tagged questions."""
+    paper, _ = _get_visible_paper(db, user, paper_id)
+    paper_question_ids = set(
+        db.execute(select(Question.id).where(Question.pyq_paper_id == paper.id, _VISIBLE)).scalars().all()
+    )
+
+    correct = incorrect = skipped = 0
+    review: list[QuestionReviewOut] = []
+    seen_ids: set[uuid.UUID] = set()
+    for answer in payload.answers:
+        if answer.question_id not in paper_question_ids or answer.question_id in seen_ids:
+            continue
+        seen_ids.add(answer.question_id)
+        question = db.get(Question, answer.question_id)
+        if question is None:
+            continue
+        attempt = record_practice_answer(db, profile, question, answer.selected_option, answer.time_taken_seconds)
+        if attempt.selected_option is None:
+            skipped += 1
+        elif attempt.is_correct:
+            correct += 1
+        else:
+            incorrect += 1
+        review.append(QuestionReviewOut.model_validate(question))
+
+    answered = correct + incorrect
+    accuracy = round(100 * correct / answered, 1) if answered else 0.0
+    return PyqSubmitResult(correct_count=correct, incorrect_count=incorrect, skipped_count=skipped, accuracy=accuracy, review=review)
 
 
 @router.get("/papers/{paper_id}/progress", response_model=PYQPaperProgressOut)
