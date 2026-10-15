@@ -195,16 +195,17 @@ def subject_performance(db: Session, user_id: uuid.UUID, course_id: uuid.UUID | 
     subj_q = select(
         Attempt.subject_id,
         Subject.name,
+        Subject.course_id,
         func.count(Attempt.id),
         func.count(Attempt.selected_option),
         func.coalesce(func.sum(case((Attempt.is_correct.is_(True), 1), else_=0)), 0),
     ).join(Subject, Subject.id == Attempt.subject_id).where(Attempt.user_id == user_id)
     if course_id:
         subj_q = subj_q.where(Attempt.course_id == course_id)
-    subj_q = subj_q.group_by(Attempt.subject_id, Subject.name)
+    subj_q = subj_q.group_by(Attempt.subject_id, Subject.name, Subject.course_id)
 
     subjects = []
-    for subject_id, name, attempted, answered, correct in db.execute(subj_q).all():
+    for subject_id, name, subj_course_id, attempted, answered, correct in db.execute(subj_q).all():
         accuracy = round(100 * correct / answered, 1) if answered else 0.0
 
         topic_q = (
@@ -241,6 +242,7 @@ def subject_performance(db: Session, user_id: uuid.UUID, course_id: uuid.UUID | 
             {
                 "subject_id": subject_id,
                 "subject_name": name,
+                "course_id": subj_course_id,
                 "attempts": attempted,
                 "accuracy": accuracy,
                 "topics": topics,
@@ -269,6 +271,7 @@ def strong_weak_areas(db: Session, user_id: uuid.UUID) -> tuple[list[dict], list
             item = {
                 "subject_id": s["subject_id"],
                 "topic_id": None,
+                "course_id": s["course_id"],
                 "name": s["subject_name"],
                 "scope": "subject",
                 "accuracy": s["accuracy"],
@@ -284,6 +287,7 @@ def strong_weak_areas(db: Session, user_id: uuid.UUID) -> tuple[list[dict], list
             item = {
                 "subject_id": s["subject_id"],
                 "topic_id": t["topic_id"],
+                "course_id": s["course_id"],
                 "name": t["topic_name"],
                 "scope": "topic",
                 "accuracy": t["accuracy"],

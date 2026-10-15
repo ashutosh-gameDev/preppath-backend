@@ -52,6 +52,10 @@ class SubjectPerformance(ORMModel):
 class StrengthWeaknessItem(ORMModel):
     subject_id: uuid.UUID | None
     topic_id: uuid.UUID | None
+    # The course this subject/topic belongs to - needed by the frontend to
+    # build a /practice/session link (course_id is a required field there,
+    # see practice.py's PracticeSessionRequest).
+    course_id: uuid.UUID
     name: str
     scope: str  # "subject" | "topic"
     accuracy: float
