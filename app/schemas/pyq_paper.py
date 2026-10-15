@@ -11,6 +11,8 @@ class PYQPaperCreate(ORMModel):
     label: str | None = None
     language: str | None = None
     course_id: uuid.UUID | None = None
+    max_marks: float | None = None
+    time_limit_minutes: int | None = None
 
 
 class PYQPaperUpdate(ORMModel):
@@ -21,6 +23,8 @@ class PYQPaperUpdate(ORMModel):
     label: str | None = None
     language: str | None = None
     course_id: uuid.UUID | None = None
+    max_marks: float | None = None
+    time_limit_minutes: int | None = None
 
 
 class PYQPaperOut(ORMModel):
@@ -51,6 +55,10 @@ class PYQPaperOut(ORMModel):
     # (image_url or any of the 4 option images) - a super-admin-only metric
     # for spotting which papers are still mostly text.
     image_count: int = 0
+    # Optional, admin-set per paper - null hides the stat on the student
+    # landing page; a null time_limit_minutes means no countdown/auto-submit.
+    max_marks: float | None = None
+    time_limit_minutes: int | None = None
 
 
 class PYQPaperPreviewOut(ORMModel):
@@ -74,6 +82,11 @@ class PYQPaperStudentOut(ORMModel):
     question_count: int
     # Distinct questions of this paper the student has already answered.
     attempted_count: int = 0
+    # Admin-set per paper, both optional - null hides the stat on the
+    # landing page; a null time_limit_minutes means no countdown/auto-submit
+    # on the attempt page.
+    max_marks: float | None = None
+    time_limit_minutes: int | None = None
 
 
 class PYQPaperProgressOut(ORMModel):

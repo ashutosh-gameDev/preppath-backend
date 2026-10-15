@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, text
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +33,13 @@ class PYQPaper(Base, UUIDPKMixin, TimestampMixin):
     course_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("courses.id", ondelete="SET NULL"), nullable=True
     )
+
+    # Both optional, filled in by an admin from the CRM form - null means
+    # "not set" (the student landing page hides the stat, and a null
+    # time_limit_minutes means the attempt page shows no countdown and
+    # never auto-submits).
+    max_marks: Mapped[float | None] = mapped_column(Float, nullable=True)
+    time_limit_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Students only see published papers; only a super admin flips this.
     is_published: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))

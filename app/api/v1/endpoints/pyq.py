@@ -116,6 +116,8 @@ def list_course_papers(course_id: uuid.UUID, user: User = Depends(get_current_us
             course_id=course_id,
             question_count=totals.get(p.id, 0),
             attempted_count=done.get(p.id, 0),
+            max_marks=p.max_marks,
+            time_limit_minutes=p.time_limit_minutes,
         )
         for p in papers
         if totals.get(p.id, 0) > 0
@@ -145,6 +147,8 @@ def get_paper_detail(paper_id: uuid.UUID, user: User = Depends(get_current_user)
         course_id=course_id,
         question_count=question_count,
         attempted_count=attempted_count,
+        max_marks=paper.max_marks,
+        time_limit_minutes=paper.time_limit_minutes,
     )
 
 
