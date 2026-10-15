@@ -8,17 +8,18 @@ question upload.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_content_access
+from app.api.v1.endpoints.admin.questions import IMAGE_FIELDS
 from app.db.session import get_db
 from app.models.enums import ContentStatus, UserRole
 from app.models.pyq_paper import PYQPaper
 from app.models.question import Question
 from app.models.user import User
 from app.schemas.common import Message
-from app.schemas.pyq_paper import PYQPaperCreate, PYQPaperOut, PYQPaperUpdate
+from app.schemas.pyq_paper import PYQPaperCreate, PYQPaperOut, PYQPaperPreviewOut, PYQPaperUpdate
 from app.services.admin_log_service import log_action
 
 router = APIRouter(prefix="/admin/pyq-papers", tags=["admin:pyq-papers"])
@@ -55,11 +56,12 @@ def publish_paper_questions(db: Session, paper_id: uuid.UUID) -> int:
     return result.rowcount or 0
 
 
-def _to_out(paper: PYQPaper, count: int, needs_image_count: int = 0) -> PYQPaperOut:
+def _to_out(paper: PYQPaper, count: int, needs_image_count: int = 0, image_count: int = 0) -> PYQPaperOut:
     return PYQPaperOut(
         id=paper.id, exam_name=paper.exam_name, year=paper.year, label=paper.label, language=paper.language,
         course_id=paper.course_id, is_published=paper.is_published, created_at=paper.created_at, question_count=count,
-        needs_image_count=needs_image_count, uploaded_by=paper.uploaded_by,
+        needs_image_count=needs_image_count, uploaded_by=paper.uploaded_by, created_by=paper.created_by,
+        image_count=image_count,
     )
 
 
@@ -101,7 +103,67 @@ def list_pyq_papers(
             .group_by(Question.pyq_paper_id)
         ).all()
     )
-    return [_to_out(p, counts.get(p.id, 0), needs_image_counts.get(p.id, 0)) for p in papers]
+    # Sum, across the 5 image slots, how many questions in each paper have
+    # that slot filled - func.count(case(...)) only counts rows where the
+    # case evaluates non-null, so each term below is "how many questions in
+    # this paper have this one image field set", summed into one number.
+    image_count_expr = sum(func.count(case((getattr(Question, f).isnot(None), 1))) for f in IMAGE_FIELDS)
+    image_counts = dict(
+        db.execute(
+            select(Question.pyq_paper_id, image_count_expr)
+            .where(Question.pyq_paper_id.in_(paper_ids))
+            .group_by(Question.pyq_paper_id)
+        ).all()
+    )
+    return [
+        _to_out(p, counts.get(p.id, 0), needs_image_counts.get(p.id, 0), image_counts.get(p.id, 0)) for p in papers
+    ]
+
+
+@router.get("/for-preview", response_model=list[PYQPaperOut])
+def list_pyq_papers_for_preview(
+    course_id: uuid.UUID | None = None,
+    admin: User = Depends(require_content_access),
+    db: Session = Depends(get_db),
+):
+    """Every paper regardless of who created it - populates the paper picker
+    on the cross-team Preview page. Unlike GET /admin/pyq-papers (which
+    scopes non-super-admins to their own papers to keep in-progress upload
+    work separate), reviewing finished content is deliberately everyone's
+    job, not just the uploader's, so this one is never scoped by created_by."""
+    q = select(PYQPaper)
+    if course_id:
+        q = q.where(PYQPaper.course_id == course_id)
+    papers = db.execute(q.order_by(PYQPaper.year.desc().nullslast(), PYQPaper.exam_name)).scalars().all()
+    if not papers:
+        return []
+    paper_ids = [p.id for p in papers]
+    counts = dict(
+        db.execute(
+            select(Question.pyq_paper_id, func.count(Question.id))
+            .where(Question.pyq_paper_id.in_(paper_ids))
+            .group_by(Question.pyq_paper_id)
+        ).all()
+    )
+    return [_to_out(p, counts.get(p.id, 0)) for p in papers]
+
+
+@router.get("/{paper_id}/preview", response_model=PYQPaperPreviewOut)
+def preview_pyq_paper(paper_id: uuid.UUID, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
+    """The whole paper exactly as the cross-team Preview page renders it -
+    every question regardless of who created it (not just the admin's own),
+    in the same order students see them in the attempt screen."""
+    paper = db.get(PYQPaper, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail="PYQ paper not found")
+    questions = db.execute(
+        select(Question).where(Question.pyq_paper_id == paper_id).order_by(Question.display_number)
+    ).scalars().all()
+    needs_image_count = sum(1 for q in questions if q.needs_image)
+    image_count = sum(1 for q in questions for f in IMAGE_FIELDS if getattr(q, f))
+    return PYQPaperPreviewOut(
+        paper=_to_out(paper, len(questions), needs_image_count, image_count), questions=questions
+    )
 
 
 @router.post("", response_model=PYQPaperOut)
@@ -142,7 +204,9 @@ def update_pyq_paper(
     needs_image_count = db.execute(
         select(func.count(Question.id)).where(Question.pyq_paper_id == paper.id, Question.needs_image.is_(True))
     ).scalar_one()
-    return _to_out(paper, count, needs_image_count)
+    image_count_expr = sum(func.count(case((getattr(Question, f).isnot(None), 1))) for f in IMAGE_FIELDS)
+    image_count = db.execute(select(image_count_expr).where(Question.pyq_paper_id == paper.id)).scalar_one() or 0
+    return _to_out(paper, count, needs_image_count, image_count)
 
 
 @router.delete("/{paper_id}", response_model=Message)

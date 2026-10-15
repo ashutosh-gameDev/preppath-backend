@@ -154,6 +154,17 @@ class QuestionUpdate(ORMModel):
     status: str | None = None
 
 
+class QuestionPreviewTextUpdate(ORMModel):
+    """Reachable from the cross-team Preview page only - deliberately limited
+    to the text a reviewer might spot a typo in, nothing else (correct
+    answer, images, status, metadata all still need the full edit screen)."""
+    question_text: str | None = None
+    option_a: str | None = None
+    option_b: str | None = None
+    option_c: str | None = None
+    option_d: str | None = None
+
+
 class QuestionAdminOut(QuestionBase):
     """Full question payload including the answer - admin / review use only."""
     id: uuid.UUID

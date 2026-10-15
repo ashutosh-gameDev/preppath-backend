@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from app.schemas.common import ORMModel
-from app.schemas.question import QuestionReviewOut
+from app.schemas.question import QuestionAdminOut, QuestionReviewOut
 
 
 class PYQPaperCreate(ORMModel):
@@ -43,6 +43,23 @@ class PYQPaperOut(ORMModel):
     # Who created this paper tag - None for legacy rows with no known
     # uploader, or if the uploader account was since deleted.
     uploaded_by: str | None = None
+    # The raw id behind uploaded_by - lets the super-admin papers list filter
+    # by uploader without a second lookup (two uploaders could share a
+    # display name; the id can't collide).
+    created_by: uuid.UUID | None = None
+    # How many of this paper's questions have at least one image filled in
+    # (image_url or any of the 4 option images) - a super-admin-only metric
+    # for spotting which papers are still mostly text.
+    image_count: int = 0
+
+
+class PYQPaperPreviewOut(ORMModel):
+    """The whole paper as rendered for the cross-team Preview page - any
+    team member can open any paper here regardless of who created it, since
+    reviewing finished content (unlike in-progress uploading) is meant to be
+    everyone's job, not just the uploader's."""
+    paper: PYQPaperOut
+    questions: list[QuestionAdminOut]
 
 
 class PYQPaperStudentOut(ORMModel):

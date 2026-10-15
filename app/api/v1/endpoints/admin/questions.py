@@ -24,6 +24,7 @@ from app.schemas.question import (
     BulkQuestionUpdateResult,
     QuestionAdminOut,
     QuestionCreate,
+    QuestionPreviewTextUpdate,
     QuestionUpdate,
 )
 from app.services import bulk_import_service, storage_service
@@ -168,6 +169,31 @@ def update_question(question_id: uuid.UUID, payload: QuestionUpdate, admin: User
         question.tags = _get_or_create_tags(db, payload.tags)
     db.flush()
     log_action(db, admin.id, "update", "question", question.id)
+    return question
+
+
+@router.patch("/{question_id}/preview-text", response_model=QuestionAdminOut)
+def update_question_preview_text(
+    question_id: uuid.UUID,
+    payload: QuestionPreviewTextUpdate,
+    admin: User = Depends(require_content_access),
+    db: Session = Depends(get_db),
+):
+    """Reachable from the cross-team Preview page - deliberately NOT scoped
+    by _require_owned (unlike PATCH /{question_id} above), since the whole
+    point of that page is letting any team member fix a typo they spot in a
+    teammate's paper. Narrow on purpose: only the 5 text fields QuestionPreviewTextUpdate
+    exposes can change here - correct_option/images/status/metadata still
+    require the full edit screen and its ownership check."""
+    question = db.get(Question, question_id)
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    changes = payload.model_dump(exclude_unset=True)
+    for field, value in changes.items():
+        setattr(question, field, value)
+    db.flush()
+    if changes:
+        log_action(db, admin.id, "update", "question", question.id, {"preview_text_edit": True})
     return question
 
 
