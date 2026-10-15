@@ -55,11 +55,11 @@ def publish_paper_questions(db: Session, paper_id: uuid.UUID) -> int:
     return result.rowcount or 0
 
 
-def _to_out(paper: PYQPaper, count: int) -> PYQPaperOut:
+def _to_out(paper: PYQPaper, count: int, needs_image_count: int = 0) -> PYQPaperOut:
     return PYQPaperOut(
         id=paper.id, exam_name=paper.exam_name, year=paper.year, label=paper.label, language=paper.language,
         course_id=paper.course_id, is_published=paper.is_published, created_at=paper.created_at, question_count=count,
-        uploaded_by=paper.uploaded_by,
+        needs_image_count=needs_image_count, uploaded_by=paper.uploaded_by,
     )
 
 
@@ -86,14 +86,22 @@ def list_pyq_papers(
     if not papers:
         return []
 
+    paper_ids = [p.id for p in papers]
     counts = dict(
         db.execute(
             select(Question.pyq_paper_id, func.count(Question.id))
-            .where(Question.pyq_paper_id.in_([p.id for p in papers]))
+            .where(Question.pyq_paper_id.in_(paper_ids))
             .group_by(Question.pyq_paper_id)
         ).all()
     )
-    return [_to_out(p, counts.get(p.id, 0)) for p in papers]
+    needs_image_counts = dict(
+        db.execute(
+            select(Question.pyq_paper_id, func.count(Question.id))
+            .where(Question.pyq_paper_id.in_(paper_ids), Question.needs_image.is_(True))
+            .group_by(Question.pyq_paper_id)
+        ).all()
+    )
+    return [_to_out(p, counts.get(p.id, 0), needs_image_counts.get(p.id, 0)) for p in papers]
 
 
 @router.post("", response_model=PYQPaperOut)
@@ -131,7 +139,10 @@ def update_pyq_paper(
     if changes:
         log_action(db, admin.id, "update", "pyq_paper", paper.id)
     count = db.execute(select(func.count(Question.id)).where(Question.pyq_paper_id == paper.id)).scalar_one()
-    return _to_out(paper, count)
+    needs_image_count = db.execute(
+        select(func.count(Question.id)).where(Question.pyq_paper_id == paper.id, Question.needs_image.is_(True))
+    ).scalar_one()
+    return _to_out(paper, count, needs_image_count)
 
 
 @router.delete("/{paper_id}", response_model=Message)

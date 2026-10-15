@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.attempt import Attempt
-from app.models.course import Course
+from app.models.course import Course, Subject
 from app.models.pyq_paper import PYQPaper
 from app.models.question import Question
 from app.models.test import Test, TestAttempt
@@ -18,6 +19,7 @@ from app.schemas.admin import (
     DailySeriesPoint,
     PapersOverviewItem,
     PopularItem,
+    SubjectPapersItem,
     UploaderStatItem,
 )
 from app.schemas.statistics import LeaderboardOut
@@ -109,6 +111,7 @@ def papers_overview(admin: User = Depends(require_admin), db: Session = Depends(
     paper_ids = [p.id for p in papers]
 
     courses = {c.id: c.name for c in db.execute(select(Course)).scalars().all()}
+    subject_names = {s.id: s.name for s in db.execute(select(Subject)).scalars().all()}
 
     counts = dict(
         db.execute(
@@ -117,6 +120,28 @@ def papers_overview(admin: User = Depends(require_admin), db: Session = Depends(
             .group_by(Question.pyq_paper_id)
         ).all()
     )
+
+    needs_image_counts = dict(
+        db.execute(
+            select(Question.pyq_paper_id, func.count(Question.id))
+            .where(Question.pyq_paper_id.in_(paper_ids), Question.needs_image.is_(True))
+            .group_by(Question.pyq_paper_id)
+        ).all()
+    )
+
+    # A paper has no subject of its own (only course_id) - whichever subject
+    # most of its questions are tagged to is treated as "the" subject here,
+    # same majority-vote approach the student-facing PYQ browser already
+    # uses to work out a paper's effective course (see pyq.py's
+    # _effective_courses).
+    subject_votes: dict = {}
+    for paper_id, subject_id, n in db.execute(
+        select(Question.pyq_paper_id, Question.subject_id, func.count(Question.id))
+        .where(Question.pyq_paper_id.in_(paper_ids))
+        .group_by(Question.pyq_paper_id, Question.subject_id)
+    ).all():
+        subject_votes.setdefault(paper_id, Counter())[subject_id] += n
+    effective_subject = {pid: counter.most_common(1)[0][0] for pid, counter in subject_votes.items()}
 
     uploaders_by_paper: dict = {}
     uploader_rows = db.execute(
@@ -137,11 +162,47 @@ def papers_overview(admin: User = Depends(require_admin), db: Session = Depends(
             label=p.label,
             course_id=p.course_id,
             course_name=courses.get(p.course_id) if p.course_id else None,
+            subject_name=subject_names.get(effective_subject.get(p.id)),
             question_count=counts.get(p.id, 0),
+            needs_image_count=needs_image_counts.get(p.id, 0),
             uploaders=sorted(uploaders_by_paper.get(p.id, set())),
         )
         for p in papers
     ]
+
+
+@router.get("/papers-by-subject", response_model=list[SubjectPapersItem])
+def papers_by_subject(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """How many PYQ papers exist per subject. A paper has no subject of its
+    own (only course_id) - each paper counts toward whichever subject most
+    of its questions are tagged to, same majority-vote approach as
+    papers_overview above. Subjects with zero papers are left out."""
+    votes: dict = {}
+    for paper_id, subject_id, n in db.execute(
+        select(Question.pyq_paper_id, Question.subject_id, func.count(Question.id))
+        .where(Question.pyq_paper_id.is_not(None))
+        .group_by(Question.pyq_paper_id, Question.subject_id)
+    ).all():
+        votes.setdefault(paper_id, Counter())[subject_id] += n
+    effective_subject = {pid: counter.most_common(1)[0][0] for pid, counter in votes.items()}
+
+    paper_counts: dict = {}
+    for subject_id in effective_subject.values():
+        paper_counts[subject_id] = paper_counts.get(subject_id, 0) + 1
+
+    subjects = db.execute(select(Subject)).scalars().all()
+    courses = {c.id: c.name for c in db.execute(select(Course)).scalars().all()}
+    items = [
+        SubjectPapersItem(
+            subject_id=s.id,
+            subject_name=s.name,
+            course_name=courses.get(s.course_id),
+            paper_count=paper_counts.get(s.id, 0),
+        )
+        for s in subjects
+        if paper_counts.get(s.id, 0) > 0
+    ]
+    return sorted(items, key=lambda x: -x.paper_count)
 
 
 @router.get("/leaderboard", response_model=LeaderboardOut)

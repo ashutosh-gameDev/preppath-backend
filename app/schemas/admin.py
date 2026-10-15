@@ -37,14 +37,21 @@ class AdminDashboardCharts(ORMModel):
 class PapersOverviewItem(ORMModel):
     """One row of the admin dashboard's content-overview table - what PYQ
     papers exist, which course/category each belongs to, how many questions
-    are in it, and who uploaded them (see admin/dashboard.py papers_overview)."""
+    are in it, who uploaded them, and how many of those questions still need
+    an image (see admin/dashboard.py papers_overview)."""
     id: uuid.UUID
     exam_name: str
     year: int | None
     label: str | None
     course_id: uuid.UUID | None
     course_name: str | None
+    # The subject most of this paper's questions are tagged to - a paper has
+    # no subject of its own (only course_id), so this is a majority vote
+    # over Question.subject_id, same pattern the student-facing PYQ browser
+    # already uses to work out a paper's "effective" course.
+    subject_name: str | None
     question_count: int
+    needs_image_count: int
     uploaders: list[str]
 
 
@@ -56,3 +63,12 @@ class UploaderStatItem(ORMModel):
     question_count: int
     published_count: int
     last_upload_at: datetime | None
+
+
+class SubjectPapersItem(ORMModel):
+    """One row of the "papers per subject" breakdown - how many PYQ papers
+    have most of their questions tagged to this subject."""
+    subject_id: uuid.UUID
+    subject_name: str
+    course_name: str | None
+    paper_count: int
