@@ -18,6 +18,7 @@ from app.api.v1.endpoints import (
     premium,
     profile,
     pyq,
+    reminders,
     statistics,
     tests,
     tools,
@@ -61,6 +62,7 @@ api_router.include_router(bookmarks.router)
 api_router.include_router(tools.router)
 api_router.include_router(premium.router)
 api_router.include_router(ads.router)
+api_router.include_router(reminders.router)
 api_router.include_router(dev_auth.router)  # 404s unless ENVIRONMENT=development
 
 # Admin-only

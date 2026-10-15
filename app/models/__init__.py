@@ -21,6 +21,7 @@ from app.models.admin import Report, AdminActivityLog, PlatformSetting  # noqa: 
 from app.models.deck import Deck  # noqa: F401
 from app.models.ad import Ad, AdEvent  # noqa: F401
 from app.models.mistake_dismissal import MistakeDismissal  # noqa: F401
+from app.models.reminder import Reminder  # noqa: F401
 
 __all__ = [
     "Base",
@@ -56,4 +57,5 @@ __all__ = [
     "Ad",
     "AdEvent",
     "MistakeDismissal",
+    "Reminder",
 ]

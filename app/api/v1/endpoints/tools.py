@@ -45,6 +45,13 @@ TOOLS = [
         "icon": "calendar",
         "available": False,
     },
+    {
+        "key": "reminders",
+        "name": "Reminders",
+        "description": "Set daily or one-time reminders to study, sleep, or anything else.",
+        "icon": "bell",
+        "available": True,
+    },
 ]
 
 
