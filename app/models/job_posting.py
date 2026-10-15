@@ -30,11 +30,16 @@ class JobPosting(Base, UUIDPKMixin, TimestampMixin):
     stream: Mapped[str | None] = mapped_column(String(100), nullable=True)
     min_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Free text (e.g. "10th Pass", "Graduate", "Any") rather than an enum -
-    # same extensibility reasoning as Question.language. `category` is the
-    # reservation category this posting is open to (General/OBC/SC/ST/EWS/
-    # PWD/All) - same "null/blank means no restriction" convention.
-    qualification: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Free text (e.g. "10th Pass", "Graduate", or a full descriptive
+    # sentence from the JSON-import flow) rather than an enum - same
+    # extensibility reasoning as Question.language. Unbounded TEXT (not
+    # VARCHAR(100) like the field below) because the AI-import prompt
+    # routinely produces a full sentence here, not just a short label -
+    # VARCHAR(100) used to hard-crash that import with a DB truncation
+    # error. `category` is the reservation category this posting is open
+    # to (General/OBC/SC/ST/EWS/PWD/All) - same "null/blank means no
+    # restriction" convention.
+    qualification: Mapped[str | None] = mapped_column(Text, nullable=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # "all" | "male" | "female" - a pure filter/display field, not currently
     # factored into notify_eligible_students_for_job's matching (that stays

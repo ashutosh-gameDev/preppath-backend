@@ -7,6 +7,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_content_access
@@ -68,19 +69,33 @@ def bulk_import_job_postings(
     Batched into two flushes total (not one `log_action` round-trip per
     posting, which also flushes) - a real import can easily be 30-50+
     postings from one article, and each flush is a network round-trip to
-    the DB, which for enough postings was slow enough to hit a proxy
-    timeout and die before any response (CORS headers included) ever
-    reached the browser - the browser then misreports that as a CORS
-    error, since from its point of view no response arrived at all."""
+    the DB, which for enough postings was slow enough to risk a proxy
+    timeout.
+
+    The two flushes are also wrapped so a DB-level failure (e.g. a value
+    too long for a column - an LLM asked for a free-text qualification
+    routinely writes a full sentence well past what a short dropdown value
+    needs) raises a normal HTTPException instead of an unhandled crash.
+    That distinction matters here specifically: HTTPException is handled
+    by ExceptionMiddleware, which sits INSIDE CORSMiddleware, so the
+    response still carries its CORS header; a truly unhandled exception
+    escapes to ServerErrorMiddleware, which sits OUTSIDE it, so that
+    response has none - the browser then reports a plain 500 as a CORS
+    policy violation, which is what actually happened here before this
+    import hit a VARCHAR(100) qualification column (see migration 0032)."""
     created: list[JobPosting] = [JobPosting(**item.model_dump(), created_by=admin.id) for item in payload.postings]
     db.add_all(created)
-    db.flush()  # assigns every posting's id in one round trip
+    try:
+        db.flush()  # assigns every posting's id in one round trip
 
-    for posting in created:
-        db.add(AdminActivityLog(admin_user_id=admin.id, action="create", entity_type="job_posting", entity_id=posting.id))
-        if posting.is_published:
-            notify_eligible_students_for_job(db, posting)
-    db.flush()  # one more round trip for every log row (+ any notifications) together
+        for posting in created:
+            db.add(AdminActivityLog(admin_user_id=admin.id, action="create", entity_type="job_posting", entity_id=posting.id))
+            if posting.is_published:
+                notify_eligible_students_for_job(db, posting)
+        db.flush()  # one more round trip for every log row (+ any notifications) together
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=f"Import failed - check the data matches each field: {e}") from e
 
     return JobPostingBulkImportResult(imported=len(created), postings=created)
 
