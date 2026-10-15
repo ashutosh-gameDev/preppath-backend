@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_content_access
 from app.db.session import get_db
+from app.models.admin import AdminActivityLog
 from app.models.job_posting import JobPosting
 from app.models.user import User
 from app.schemas.common import Message
@@ -62,16 +63,25 @@ def bulk_import_job_postings(
     LLM along with a fixed prompt, pastes the JSON reply here). Each
     object is validated the same way a single POST /admin/job-postings
     would be - a malformed one 422s the whole request before anything is
-    created, same as any other Pydantic-validated endpoint."""
-    created: list[JobPosting] = []
-    for item in payload.postings:
-        posting = JobPosting(**item.model_dump(), created_by=admin.id)
-        db.add(posting)
-        db.flush()
-        log_action(db, admin.id, "create", "job_posting", posting.id)
+    created, same as any other Pydantic-validated endpoint.
+
+    Batched into two flushes total (not one `log_action` round-trip per
+    posting, which also flushes) - a real import can easily be 30-50+
+    postings from one article, and each flush is a network round-trip to
+    the DB, which for enough postings was slow enough to hit a proxy
+    timeout and die before any response (CORS headers included) ever
+    reached the browser - the browser then misreports that as a CORS
+    error, since from its point of view no response arrived at all."""
+    created: list[JobPosting] = [JobPosting(**item.model_dump(), created_by=admin.id) for item in payload.postings]
+    db.add_all(created)
+    db.flush()  # assigns every posting's id in one round trip
+
+    for posting in created:
+        db.add(AdminActivityLog(admin_user_id=admin.id, action="create", entity_type="job_posting", entity_id=posting.id))
         if posting.is_published:
             notify_eligible_students_for_job(db, posting)
-        created.append(posting)
+    db.flush()  # one more round trip for every log row (+ any notifications) together
+
     return JobPostingBulkImportResult(imported=len(created), postings=created)
 
 
