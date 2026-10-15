@@ -16,10 +16,10 @@ from app.models.user import User
 from app.schemas.admin import (
     AdminDashboardCharts,
     AdminDashboardStats,
+    CoursePapersItem,
     DailySeriesPoint,
     PapersOverviewItem,
     PopularItem,
-    SubjectPapersItem,
     UploaderStatItem,
 )
 from app.schemas.statistics import LeaderboardOut
@@ -171,36 +171,23 @@ def papers_overview(admin: User = Depends(require_admin), db: Session = Depends(
     ]
 
 
-@router.get("/papers-by-subject", response_model=list[SubjectPapersItem])
-def papers_by_subject(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """How many PYQ papers exist per subject. A paper has no subject of its
-    own (only course_id) - each paper counts toward whichever subject most
-    of its questions are tagged to, same majority-vote approach as
-    papers_overview above. Subjects with zero papers are left out."""
-    votes: dict = {}
-    for paper_id, subject_id, n in db.execute(
-        select(Question.pyq_paper_id, Question.subject_id, func.count(Question.id))
-        .where(Question.pyq_paper_id.is_not(None))
-        .group_by(Question.pyq_paper_id, Question.subject_id)
-    ).all():
-        votes.setdefault(paper_id, Counter())[subject_id] += n
-    effective_subject = {pid: counter.most_common(1)[0][0] for pid, counter in votes.items()}
-
-    paper_counts: dict = {}
-    for subject_id in effective_subject.values():
-        paper_counts[subject_id] = paper_counts.get(subject_id, 0) + 1
-
-    subjects = db.execute(select(Subject)).scalars().all()
+@router.get("/papers-by-course", response_model=list[CoursePapersItem])
+def papers_by_course(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """How many PYQ papers exist per course - unlike subject (which a paper
+    has no direct link to, see papers_overview's majority-vote comment),
+    PYQPaper.course_id is a direct field, so this is a plain group-by.
+    Papers with no course set are grouped under "No course"."""
+    rows = db.execute(
+        select(PYQPaper.course_id, func.count(PYQPaper.id)).group_by(PYQPaper.course_id)
+    ).all()
     courses = {c.id: c.name for c in db.execute(select(Course)).scalars().all()}
     items = [
-        SubjectPapersItem(
-            subject_id=s.id,
-            subject_name=s.name,
-            course_name=courses.get(s.course_id),
-            paper_count=paper_counts.get(s.id, 0),
+        CoursePapersItem(
+            course_id=course_id,
+            course_name=courses.get(course_id, "No course") if course_id else "No course",
+            paper_count=count,
         )
-        for s in subjects
-        if paper_counts.get(s.id, 0) > 0
+        for course_id, count in rows
     ]
     return sorted(items, key=lambda x: -x.paper_count)
 

@@ -65,10 +65,11 @@ class UploaderStatItem(ORMModel):
     last_upload_at: datetime | None
 
 
-class SubjectPapersItem(ORMModel):
-    """One row of the "papers per subject" breakdown - how many PYQ papers
-    have most of their questions tagged to this subject."""
-    subject_id: uuid.UUID
-    subject_name: str
-    course_name: str | None
+class CoursePapersItem(ORMModel):
+    """One row of the "papers per course" breakdown - how many PYQ papers
+    are tagged to this course (PYQPaper.course_id is a direct field, unlike
+    subject - see papers_overview's majority-vote comment for why subject
+    needs inferring)."""
+    course_id: uuid.UUID | None
+    course_name: str
     paper_count: int
