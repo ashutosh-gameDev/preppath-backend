@@ -31,6 +31,10 @@ def update_my_user(
         profile.date_of_birth = payload.date_of_birth
     if profile and payload.qualification is not None:
         profile.qualification = payload.qualification
+    if profile and payload.city is not None:
+        profile.city = payload.city
+    if profile and payload.state is not None:
+        profile.state = payload.state
 
     db.flush()
     user.profile = profile

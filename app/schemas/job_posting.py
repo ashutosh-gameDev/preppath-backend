@@ -16,6 +16,9 @@ class JobPostingCreate(ORMModel):
     category: str | None = None
     gender: str = "all"
     apply_link: str | None = None
+    salary: str | None = None
+    application_fee: str | None = None
+    age_relaxation: str | None = None
     course_id: uuid.UUID | None = None
     posted_date: date
     application_deadline: date | None = None
@@ -34,6 +37,9 @@ class JobPostingUpdate(ORMModel):
     category: str | None = None
     gender: str | None = None
     apply_link: str | None = None
+    salary: str | None = None
+    application_fee: str | None = None
+    age_relaxation: str | None = None
     course_id: uuid.UUID | None = None
     posted_date: date | None = None
     application_deadline: date | None = None
@@ -53,6 +59,9 @@ class JobPostingOut(ORMModel):
     category: str | None
     gender: str
     apply_link: str | None
+    salary: str | None
+    application_fee: str | None
+    age_relaxation: str | None
     course_id: uuid.UUID | None
     posted_date: date
     application_deadline: date | None

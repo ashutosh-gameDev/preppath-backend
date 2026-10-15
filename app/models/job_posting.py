@@ -41,6 +41,12 @@ class JobPosting(Base, UUIDPKMixin, TimestampMixin):
     # age + qualification only; Profile has no gender field to match against).
     gender: Mapped[str] = mapped_column(String(10), nullable=False, default="all")
     apply_link: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # Free text, same convention as qualification/description - govt ads
+    # state these as pay-scale/category tables, not single numbers, so an
+    # admin copies the real text in rather than the app computing it.
+    salary: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    application_fee: Mapped[str | None] = mapped_column(Text, nullable=True)
+    age_relaxation: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Optional scoping to one course (e.g. only relevant to SSC CGL
     # students) - null means relevant to everyone.
     course_id: Mapped[uuid.UUID | None] = mapped_column(

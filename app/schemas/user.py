@@ -21,6 +21,8 @@ class ProfileOut(ORMModel):
     tier_expires_at: datetime | None = None
     date_of_birth: date | None = None
     qualification: str | None = None
+    city: str | None = None
+    state: str | None = None
 
     # @computed_field (not a bare @property) so these actually appear in the
     # serialized JSON - a plain property is invisible to Pydantic v2's
@@ -71,6 +73,8 @@ class UserUpdateMe(ORMModel):
     daily_goal_questions: int | None = None
     date_of_birth: date | None = None
     qualification: str | None = None
+    city: str | None = None
+    state: str | None = None
 
 
 class AdminUserListItem(ORMModel):
