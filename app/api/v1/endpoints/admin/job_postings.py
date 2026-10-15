@@ -14,7 +14,13 @@ from app.db.session import get_db
 from app.models.job_posting import JobPosting
 from app.models.user import User
 from app.schemas.common import Message
-from app.schemas.job_posting import JobPostingCreate, JobPostingOut, JobPostingUpdate
+from app.schemas.job_posting import (
+    JobPostingBulkImportRequest,
+    JobPostingBulkImportResult,
+    JobPostingCreate,
+    JobPostingOut,
+    JobPostingUpdate,
+)
 from app.services.admin_log_service import log_action
 from app.services.notification_service import notify_eligible_students_for_job
 
@@ -45,6 +51,28 @@ def create_job_posting(
     if posting.is_published:
         notify_eligible_students_for_job(db, posting)
     return posting
+
+
+@router.post("/bulk-import", response_model=JobPostingBulkImportResult)
+def bulk_import_job_postings(
+    payload: JobPostingBulkImportRequest, admin: User = Depends(require_content_access), db: Session = Depends(get_db)
+):
+    """Create many postings at once from pasted JSON (see admin-web's Jobs
+    page "Import from JSON" flow - an admin pastes a source article into an
+    LLM along with a fixed prompt, pastes the JSON reply here). Each
+    object is validated the same way a single POST /admin/job-postings
+    would be - a malformed one 422s the whole request before anything is
+    created, same as any other Pydantic-validated endpoint."""
+    created: list[JobPosting] = []
+    for item in payload.postings:
+        posting = JobPosting(**item.model_dump(), created_by=admin.id)
+        db.add(posting)
+        db.flush()
+        log_action(db, admin.id, "create", "job_posting", posting.id)
+        if posting.is_published:
+            notify_eligible_students_for_job(db, posting)
+        created.append(posting)
+    return JobPostingBulkImportResult(imported=len(created), postings=created)
 
 
 @router.patch("/{posting_id}", response_model=JobPostingOut)

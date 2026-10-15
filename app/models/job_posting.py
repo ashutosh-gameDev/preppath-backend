@@ -21,11 +21,25 @@ class JobPosting(Base, UUIDPKMixin, TimestampMixin):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     organization: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # "government" | "private" - free text like the fields below, not an
+    # enum, but the CRM form only ever offers those two.
+    job_type: Mapped[str] = mapped_column(String(20), nullable=False, default="government")
+    # Broad sector tag for browsing (e.g. "Banking", "Railways", "Defence")
+    # - distinct from the optional course_id link below, which scopes to one
+    # specific exam-prep course rather than a whole employment sector.
+    stream: Mapped[str | None] = mapped_column(String(100), nullable=True)
     min_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Free text (e.g. "10th Pass", "Graduate", "Any") rather than an enum -
-    # same extensibility reasoning as Question.language.
+    # same extensibility reasoning as Question.language. `category` is the
+    # reservation category this posting is open to (General/OBC/SC/ST/EWS/
+    # PWD/All) - same "null/blank means no restriction" convention.
     qualification: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # "all" | "male" | "female" - a pure filter/display field, not currently
+    # factored into notify_eligible_students_for_job's matching (that stays
+    # age + qualification only; Profile has no gender field to match against).
+    gender: Mapped[str] = mapped_column(String(10), nullable=False, default="all")
     apply_link: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     # Optional scoping to one course (e.g. only relevant to SSC CGL
     # students) - null means relevant to everyone.
