@@ -191,6 +191,26 @@ class TimelineBlock(LenientBlock):
     events: list[TimelineEvent] = []
 
 
+class MapEvent(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    date: str | None = None
+    label: str
+    content: str | None = None
+    # Percent position (0-100) on the student-facing map image/outline -
+    # defaults to dead center so a model that omits a coordinate still
+    # produces a valid (if imprecise) pin rather than failing the import.
+    x: float = 50
+    y: float = 50
+
+
+class MapBlock(LenientBlock):
+    type: Literal["map"]
+    title: str | None = None
+    image_url: str | None = None
+    image_caption: str | None = None
+    events: list[MapEvent] = []
+
+
 class CompareColumn(BaseModel):
     model_config = ConfigDict(extra="allow")
     title: str
@@ -228,7 +248,7 @@ Block = Annotated[
     Union[
         TextBlock, HeadingBlock, FormulaBlock, HighlightBlock, ImageBlock, RevealBlock,
         StepsBlock, McqBlock, TrueFalseBlock, FillBlankBlock, ReorderBlock, MatchBlock,
-        SliderBlock, HotspotBlock, TimelineBlock, CompareBlock, MemoryHookBlock,
+        SliderBlock, HotspotBlock, TimelineBlock, MapBlock, CompareBlock, MemoryHookBlock,
         ExamTipBlock, PyqBlock, CounterBlock, DividerBlock, CurrentAffairBlock,
     ],
     Field(discriminator="type"),
