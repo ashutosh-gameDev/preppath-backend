@@ -18,8 +18,10 @@ from app.api.v1.endpoints import (
     premium,
     profile,
     pyq,
+    referrals,
     reminders,
     statistics,
+    study_sessions,
     tests,
     tools,
     users,
@@ -30,6 +32,7 @@ from app.api.v1.endpoints.admin import (
     courses as admin_courses,
     dashboard as admin_dashboard,
     decks as admin_decks,
+    growth as admin_growth,
     job_postings as admin_job_postings,
     pyq_papers as admin_pyq_papers,
     questions as admin_questions,
@@ -63,6 +66,8 @@ api_router.include_router(tools.router)
 api_router.include_router(premium.router)
 api_router.include_router(ads.router)
 api_router.include_router(reminders.router)
+api_router.include_router(referrals.router)
+api_router.include_router(study_sessions.router)
 api_router.include_router(dev_auth.router)  # 404s unless ENVIRONMENT=development
 
 # Admin-only
@@ -78,3 +83,4 @@ api_router.include_router(admin_tests.router)
 api_router.include_router(admin_users.router)
 api_router.include_router(admin_settings.router)
 api_router.include_router(admin_team.router)
+api_router.include_router(admin_growth.router)

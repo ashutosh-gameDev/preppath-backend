@@ -29,6 +29,16 @@ class User(Base, TimestampMixin):
     role: Mapped[str] = mapped_column(String(20), default=UserRole.STUDENT, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Unique per user, generated once at account creation (see
+    # api/deps.get_current_user) - shared via a WhatsApp link so a friend's
+    # signup can be attributed back to this account (see referral_service.py).
+    referral_code: Mapped[str] = mapped_column(String(12), unique=True, index=True, nullable=False)
+    # Set at most once, by POST /referrals/claim, shortly after THIS user's
+    # own account was created - who referred them in, if anyone. Null for
+    # everyone who signed up organically.
+    referred_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     profile: Mapped["Profile"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"

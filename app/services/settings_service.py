@@ -46,6 +46,15 @@ DEFAULTS: dict[str, Any] = {
     # Daily challenge default size.
     "daily_challenge.question_count": 10,
     "daily_challenge.seconds_per_question": 45,
+    # Refer-a-friend: days of Pro granted to the REFERRER once a new
+    # student signs up through their shared link (see referrals.py).
+    "referral.reward_days": 7,
+    # Study Timer monthly leaderboard: how many top students (by total
+    # study hours that calendar month) get rewarded, and for how many days
+    # of Pro - distributed automatically once the month ends (see
+    # study_leaderboard_service.py).
+    "study_leaderboard.winner_count": 10,
+    "study_leaderboard.reward_days": 30,
 }
 
 

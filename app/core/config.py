@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     SUPABASE_STORAGE_BUCKET: str = "exam-platform-media"
 
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
+    # The student-web app's own public URL - used to build the referral
+    # share link (STUDENT_WEB_URL + "/signup?ref=CODE"). MUST be set to the
+    # real production domain via Render's env vars; this default is only
+    # ever correct for local dev.
+    STUDENT_WEB_URL: str = "http://localhost:3001"
     # This backend's own publicly-reachable base URL - only used to build
     # URLs for the local dev-mode upload fallback (see storage_service.py);
     # irrelevant once SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY are set, since

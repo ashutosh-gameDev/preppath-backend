@@ -15,6 +15,7 @@ from app.core.security import decode_supabase_token
 from app.db.session import get_db
 from app.models.enums import UserRole
 from app.models.user import Profile, User
+from app.services.referral_service import generate_unique_referral_code
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -39,6 +40,7 @@ def get_current_user(
             id=user_id,
             email=token_payload.email or f"{user_id}@unknown.local",
             role=UserRole.STUDENT,
+            referral_code=generate_unique_referral_code(db),
         )
         db.add(user)
         db.flush()

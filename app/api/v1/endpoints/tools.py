@@ -52,6 +52,13 @@ TOOLS = [
         "icon": "bell",
         "available": True,
     },
+    {
+        "key": "referrals",
+        "name": "Refer & Earn",
+        "description": "Share with a friend on WhatsApp - get free Pro when they sign up.",
+        "icon": "gift",
+        "available": True,
+    },
 ]
 
 
