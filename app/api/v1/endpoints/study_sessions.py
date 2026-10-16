@@ -3,9 +3,10 @@ Study Timer: logs completed sessions and serves the monthly leaderboard.
 See services/study_leaderboard_service.py for how the top-10 reward
 actually gets paid out (lazily, on month rollover, no cron needed).
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -23,6 +24,25 @@ router = APIRouter(prefix="/study-sessions", tags=["study-sessions"])
 def log_study_session(
     payload: StudySessionCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
+    # One submission per calendar day (UTC) per user - keeps the leaderboard
+    # a "did you have one real study block today" signal rather than
+    # something padded by resetting the timer repeatedly. The frontend
+    # gates the attempt itself behind a rewarded ad for non-Pro users;
+    # this check is independent of that and always applies.
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
+    already_today = db.execute(
+        select(StudySession.id).where(
+            StudySession.user_id == user.id,
+            StudySession.created_at >= today_start,
+            StudySession.created_at < tomorrow_start,
+        )
+    ).first()
+    if already_today:
+        raise HTTPException(
+            status_code=409, detail="You've already logged a study session today - come back tomorrow!"
+        )
+
     session = StudySession(user_id=user.id, duration_seconds=max(0, payload.duration_seconds))
     db.add(session)
     db.flush()
