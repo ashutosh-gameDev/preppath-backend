@@ -101,6 +101,7 @@ def list_questions(
     needs_image: bool | None = Query(None, description="Only questions flagged as missing a picture (or, set false, only the rest)"),
     search: str | None = None,
     display_number: int | None = Query(None, description="Exact match on the short question # (e.g. 1042)"),
+    created_by: uuid.UUID | None = Query(None, description="Only questions this specific team member created"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     admin: User = Depends(require_content_access),
@@ -135,6 +136,8 @@ def list_questions(
         q = q.where(Question.display_number == display_number)
     if search:
         q = q.where(Question.question_text.ilike(f"%{search}%"))
+    if created_by:
+        q = q.where(Question.created_by == created_by)
     q = _scope_own(q, admin)
 
     total = db.execute(select(func.count()).select_from(q.subquery())).scalar_one()

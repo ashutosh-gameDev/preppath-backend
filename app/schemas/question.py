@@ -183,6 +183,9 @@ class QuestionAdminOut(QuestionBase):
     # Who added this question - see Question.uploader_label. None for rows
     # from before this was tracked, or whose uploader account was deleted.
     uploader_label: str | None = None
+    # The raw id behind uploader_label - lets the CRM filter by uploader
+    # without a second lookup (two uploaders could share a display name).
+    created_by: uuid.UUID | None = None
 
 
 class QuestionAttemptOut(ORMModel):
