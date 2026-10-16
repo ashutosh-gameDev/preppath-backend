@@ -65,6 +65,24 @@ class TopicProgressOut(ORMModel):
     needs_revision: bool = False
 
 
+class CustomTopicCreate(ORMModel):
+    subject_id: uuid.UUID
+    name: str
+
+
+class CustomTopicUpdate(ORMModel):
+    name: str | None = None
+    is_completed: bool | None = None
+
+
+class CustomTopicOut(ORMModel):
+    id: uuid.UUID
+    subject_id: uuid.UUID
+    name: str
+    is_completed: bool
+    order_index: int
+
+
 class SubjectBase(ORMModel):
     name: str
     order_index: int = 0

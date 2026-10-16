@@ -3,15 +3,24 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.course import Course, Subject, Topic, TopicProgress
+from app.models.custom_topic import CustomTopic
 from app.models.user import User
 from app.schemas.common import Message
-from app.schemas.course import CourseOut, CourseTreeOut, TopicProgressIn, TopicProgressOut
+from app.schemas.course import (
+    CourseOut,
+    CourseTreeOut,
+    CustomTopicCreate,
+    CustomTopicOut,
+    CustomTopicUpdate,
+    TopicProgressIn,
+    TopicProgressOut,
+)
 
 router = APIRouter(prefix="/courses", tags=["courses"])
 
@@ -87,3 +96,60 @@ def set_topic_progress(
             existing.needs_revision = payload.needs_revision
     db.flush()
     return Message(detail="Progress updated")
+
+
+# --- Custom topics (a student's own syllabus checklist items) -----------------
+
+@router.get("/{course_id}/custom-topics", response_model=list[CustomTopicOut])
+def list_custom_topics(course_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Every custom topic the caller has added under any subject in this
+    course - the Syllabus page merges these into each subject's own topic
+    list client-side."""
+    return db.execute(
+        select(CustomTopic)
+        .join(Subject, Subject.id == CustomTopic.subject_id)
+        .where(CustomTopic.user_id == user.id, Subject.course_id == course_id)
+        .order_by(CustomTopic.order_index, CustomTopic.created_at)
+    ).scalars().all()
+
+
+@router.post("/custom-topics", response_model=CustomTopicOut)
+def create_custom_topic(
+    payload: CustomTopicCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    if not payload.name.strip():
+        raise HTTPException(status_code=422, detail="Give this topic a name")
+    next_order = db.execute(
+        select(func.coalesce(func.max(CustomTopic.order_index), -1) + 1).where(
+            CustomTopic.user_id == user.id, CustomTopic.subject_id == payload.subject_id
+        )
+    ).scalar_one()
+    topic = CustomTopic(user_id=user.id, subject_id=payload.subject_id, name=payload.name.strip(), order_index=next_order)
+    db.add(topic)
+    db.flush()
+    return topic
+
+
+@router.patch("/custom-topics/{topic_id}", response_model=CustomTopicOut)
+def update_custom_topic(
+    topic_id: uuid.UUID, payload: CustomTopicUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    topic = db.get(CustomTopic, topic_id)
+    if topic is None or topic.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Custom topic not found")
+    if payload.name is not None:
+        topic.name = payload.name.strip() or topic.name
+    if payload.is_completed is not None:
+        topic.is_completed = payload.is_completed
+    db.flush()
+    return topic
+
+
+@router.delete("/custom-topics/{topic_id}", response_model=Message)
+def delete_custom_topic(topic_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    topic = db.get(CustomTopic, topic_id)
+    if topic is None or topic.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Custom topic not found")
+    db.delete(topic)
+    db.flush()
+    return Message(detail="Custom topic deleted")

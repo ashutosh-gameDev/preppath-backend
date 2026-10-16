@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_active_profile, get_current_user
 from app.db.session import get_db
 from app.models.attempt import Attempt
-from app.models.course import Course, Subject, Topic
+from app.models.course import Course, Subject, Topic, TopicProgress
 from app.models.enums import ContentStatus
 from app.models.question import Question
 from app.models.user import Profile, User
@@ -111,15 +111,28 @@ def get_continue_practice(user: User = Depends(get_current_user), db: Session = 
     subject = db.get(Subject, last.subject_id)
     topic = db.get(Topic, last.topic_id) if last.topic_id else None
 
-    total_in_scope = db.execute(
-        select(Question).where(Question.status == ContentStatus.PUBLISHED, Question.subject_id == last.subject_id)
+    # Syllabus progress, not question-answering coverage: how many of this
+    # subject's topics the student has actually ticked complete (see the
+    # Syllabus tab's mark-complete toggle), not how many questions they've
+    # happened to answer in it - a student can grind the same easy topic's
+    # question bank for "100% coverage" without having worked through the
+    # syllabus at all, which is what this used to measure.
+    topics_in_subject = db.execute(
+        select(Topic.id).where(Topic.subject_id == last.subject_id, Topic.is_published.is_(True))
     ).scalars().all()
-    attempted_in_scope = db.execute(
-        select(Attempt.question_id).where(Attempt.user_id == user.id, Attempt.subject_id == last.subject_id)
-    ).scalars().all()
-    progress_pct = (
-        round(100 * len(set(attempted_in_scope)) / len(total_in_scope), 1) if total_in_scope else 0.0
+    topics_completed = (
+        db.execute(
+            select(func.count(TopicProgress.id)).where(
+                TopicProgress.user_id == user.id,
+                TopicProgress.topic_id.in_(topics_in_subject),
+                TopicProgress.is_completed.is_(True),
+            )
+        ).scalar_one()
+        if topics_in_subject
+        else 0
     )
+    topics_total = len(topics_in_subject)
+    progress_pct = round(100 * topics_completed / topics_total, 1) if topics_total else 0.0
 
     return {
         "course_id": course.id if course else None,
@@ -129,6 +142,8 @@ def get_continue_practice(user: User = Depends(get_current_user), db: Session = 
         "topic_id": topic.id if topic else None,
         "topic_name": topic.name if topic else None,
         "progress_pct": progress_pct,
+        "topics_completed": topics_completed,
+        "topics_total": topics_total,
         "last_attempted_at": last.attempted_at,
     }
 
