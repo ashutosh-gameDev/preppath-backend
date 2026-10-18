@@ -35,6 +35,10 @@ def update_my_user(
         profile.city = payload.city
     if profile and payload.state is not None:
         profile.state = payload.state
+    if profile and payload.gender is not None:
+        profile.gender = payload.gender
+    if profile and payload.category is not None:
+        profile.category = payload.category
 
     db.flush()
     user.profile = profile

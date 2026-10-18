@@ -16,7 +16,7 @@ from app.models.enums import UserRole
 from app.models.user import Profile, User
 from app.schemas.common import Message
 from app.schemas.team import TeamMemberCreate, TeamMemberOut, TeamMemberPasswordReset
-from app.services import team_service
+from app.services import referral_service, team_service
 from app.services.admin_log_service import log_action
 
 router = APIRouter(prefix="/admin/team", tags=["admin:team"])
@@ -42,6 +42,7 @@ def create_team_member(payload: TeamMemberCreate, admin: User = Depends(require_
         email=team_service.username_to_email(payload.username),
         username=payload.username,
         role=UserRole.CONTENT_EDITOR,
+        referral_code=referral_service.generate_unique_referral_code(db),
     )
     db.add(user)
     db.flush()

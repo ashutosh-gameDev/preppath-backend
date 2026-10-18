@@ -82,9 +82,11 @@ class Profile(Base, TimestampMixin):
     # same reasoning as other free-text taxonomy fields in this codebase.
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     qualification: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    # Self-reported, for personalization (e.g. city-wise ads/content later) -
-    # not used for any matching/eligibility logic today.
+    # Self-reported - used both for Jobs eligibility filtering and (city/
+    # state only) CRM ad targeting, see Ad.states/Ad.cities in models/ad.py.
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(10), nullable=True)  # "male" | "female" | "other"
+    category: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "General" | "OBC" | "SC" | "ST" | "EWS" | "PWD"
 
     user: Mapped["User"] = relationship(back_populates="profile")
