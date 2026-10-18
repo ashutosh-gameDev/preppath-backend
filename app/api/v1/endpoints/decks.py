@@ -23,6 +23,9 @@ def list_decks(
     course_id: uuid.UUID,
     topic_id: uuid.UUID | None = None,
     subtopic_id: uuid.UUID | None = None,
+    # "hi" to prefer Hindi-tagged decks; any other value (or omitted) leaves
+    # the list as-is (today's default, effectively English/untagged).
+    language: str | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -31,7 +34,15 @@ def list_decks(
         q = q.where(Deck.topic_id == topic_id)
     if subtopic_id:
         q = q.where(Deck.subtopic_id == subtopic_id)
-    return db.execute(q.order_by(Deck.created_at.desc())).scalars().all()
+    decks = db.execute(q.order_by(Deck.created_at.desc())).scalars().all()
+    # Prefer Hindi: if this course/topic/subtopic scope has ANY Hindi-tagged
+    # decks, show only those; otherwise fall back to the full (English/
+    # untagged) list so a not-yet-translated scope never comes up empty.
+    if language == "hi":
+        hindi = [d for d in decks if d.language and d.language.strip().lower() == "hindi"]
+        if hindi:
+            return hindi
+    return decks
 
 
 @router.get("/{deck_id}", response_model=DeckOut)

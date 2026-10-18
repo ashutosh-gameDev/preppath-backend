@@ -52,6 +52,11 @@ class Deck(Base, UUIDPKMixin, TimestampMixin):
     cards: Mapped[list[dict]] = mapped_column(JSON, nullable=False)
 
     status: Mapped[str] = mapped_column(String(20), default=ContentStatus.DRAFT, nullable=False, index=True)
+    # "English" | "Hindi" | null (not set) - admin-set after creation (see
+    # admin/decks.py's update_deck), same free-text-but-CRM-constrained-to-a-
+    # fixed-list convention as PYQPaper.language. Null is treated as English
+    # for student-facing language filtering (decks.py's list_decks).
+    language: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # SET NULL, not RESTRICT: unlike course/subject (never silently destroy
     # content), losing track of *who* created a deck if their account is

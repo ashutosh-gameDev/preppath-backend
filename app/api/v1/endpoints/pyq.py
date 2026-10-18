@@ -75,7 +75,14 @@ def _get_visible_paper(db: Session, user: User, paper_id: uuid.UUID) -> tuple[PY
 
 
 @router.get("/courses/{course_id}/papers", response_model=list[PYQPaperStudentOut])
-def list_course_papers(course_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_course_papers(
+    course_id: uuid.UUID,
+    # "hi" to prefer Hindi-tagged papers; see decks.py's list_decks for the
+    # identical "prefer Hindi, fall back to English if this course has none" rule.
+    language: str | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     if not _is_enrolled(db, user, course_id):
         return []
 
@@ -88,6 +95,10 @@ def list_course_papers(course_id: uuid.UUID, user: User = Depends(get_current_us
     papers = [p for p in candidates if courses.get(p.id) == course_id]
     if not papers:
         return []
+    if language == "hi":
+        hindi_papers = [p for p in papers if p.language and p.language.strip().lower() == "hindi"]
+        if hindi_papers:
+            papers = hindi_papers
     ids = [p.id for p in papers]
 
     totals = dict(

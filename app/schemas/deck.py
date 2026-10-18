@@ -324,6 +324,7 @@ class DeckOut(ORMModel):
     cards: list[dict]
     status: str
     created_by: uuid.UUID | None
+    language: str | None = None
 
 
 class DeckPreviewSummary(ORMModel):
@@ -352,3 +353,4 @@ class DeckPreviewResponse(ORMModel):
 
 class DeckUpdate(ORMModel):
     status: str | None = None
+    language: str | None = None

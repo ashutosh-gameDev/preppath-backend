@@ -119,6 +119,8 @@ def update_deck(deck_id: uuid.UUID, payload: DeckUpdate, admin: User = Depends(r
         if payload.status not in VALID_STATUS:
             raise HTTPException(status_code=400, detail="status must be one of draft, published")
         deck.status = payload.status
+    if "language" in payload.model_fields_set:
+        deck.language = payload.language or None
     db.flush()
     log_action(db, admin.id, "update", "deck", deck.id)
     return deck
