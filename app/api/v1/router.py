@@ -26,6 +26,7 @@ from app.api.v1.endpoints import (
     tests,
     tools,
     users,
+    videos,
 )
 from app.api.v1.endpoints.admin import (
     ads as admin_ads,
@@ -70,6 +71,7 @@ api_router.include_router(reminders.router)
 api_router.include_router(referrals.router)
 api_router.include_router(study_sessions.router)
 api_router.include_router(team_self.router)
+api_router.include_router(videos.router)
 api_router.include_router(dev_auth.router)  # 404s unless ENVIRONMENT=development
 
 # Admin-only
