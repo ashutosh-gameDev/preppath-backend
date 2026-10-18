@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, func
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,7 +27,22 @@ class Ad(Base, UUIDPKMixin, TimestampMixin):
     `courses` targets the ad to one or more specific courses (e.g. an SSC
     CGL coaching ad shown only to SSC CGL students) - an empty list means
     untargeted, shown regardless of course, same "empty/null = no
-    restriction" convention as JobPosting.course_id.
+    restriction" convention as JobPosting.course_id. `states`/`cities` are
+    the same convention applied to Profile.city/state - empty = untargeted,
+    OR'd together when either is set (matches if the student's city is in
+    `cities` OR their state is in `states`).
+
+    `format` picks the rendering shape: "banner" is the original 3:1 AdSlot
+    card; "fullscreen" is a full-bleed interstitial spliced into the Study
+    Bite swipe feed every `interstitial_every_n` cards (only meaningful for
+    that format - see AdInterstitialReel.tsx in student-web).
+
+    `max_impressions`/`max_clicks` are optional auto-pause caps, enforced
+    live in /ads/active by comparing against AdEvent counts (not a stored
+    counter, same reasoning as CTR never being stored) - once hit, the ad
+    simply stops being selected; `is_active` is left alone so the CRM can
+    still tell "admin paused it" apart from "capped out" (see
+    admin/ads.py's computed `auto_paused_reason`).
     """
     __tablename__ = "ads"
 
@@ -41,6 +56,14 @@ class Ad(Base, UUIDPKMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    states: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    cities: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    format: Mapped[str] = mapped_column(String(20), nullable=False, default="banner")  # "banner" | "fullscreen"
+    max_impressions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_clicks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Fullscreen format only: show this ad after every N reels in the Study
+    # Bite swipe feed. Null/0 on a fullscreen ad means it's never spliced in.
+    interstitial_every_n: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

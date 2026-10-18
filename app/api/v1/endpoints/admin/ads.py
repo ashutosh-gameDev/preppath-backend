@@ -5,6 +5,7 @@ lever rather than everyday content work, so content_editor (intern)
 accounts can't touch this.
 """
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import func, select
@@ -33,13 +34,29 @@ async def upload_ad_image(file: UploadFile, admin: User = Depends(require_admin)
     return {"url": url}
 
 
+def _auto_paused_reason(ad: Ad, impressions: int, clicks: int, now: datetime) -> str | None:
+    """Why this ad has effectively stopped serving, independent of the
+    admin's own `is_active` toggle - computed fresh from data ad_events
+    already has, never stored (same reasoning as CTR)."""
+    if ad.max_impressions is not None and impressions >= ad.max_impressions:
+        return "Max impressions reached"
+    if ad.max_clicks is not None and clicks >= ad.max_clicks:
+        return "Max clicks reached"
+    if ad.ends_at is not None and ad.ends_at < now:
+        return "Date range ended"
+    return None
+
+
 def _to_out(ad: Ad, impressions: int, clicks: int) -> AdOut:
     ctr = (clicks / impressions * 100) if impressions else 0.0
     return AdOut(
         id=ad.id, title=ad.title, image_url=ad.image_url, link_url=ad.link_url, body_text=ad.body_text,
         placement=ad.placement, priority=ad.priority, is_active=ad.is_active, starts_at=ad.starts_at,
         ends_at=ad.ends_at, created_at=ad.created_at, course_ids=[c.id for c in ad.courses],
+        states=ad.states, cities=ad.cities, format=ad.format,
+        max_impressions=ad.max_impressions, max_clicks=ad.max_clicks, interstitial_every_n=ad.interstitial_every_n,
         impressions=impressions, clicks=clicks, ctr=round(ctr, 2),
+        auto_paused_reason=_auto_paused_reason(ad, impressions, clicks, datetime.now(timezone.utc)),
     )
 
 
