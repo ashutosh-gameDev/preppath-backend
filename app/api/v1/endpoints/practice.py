@@ -95,14 +95,18 @@ def submit_practice_answer(
 
 
 @router.get("/continue")
-def get_continue_practice(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_continue_practice(
+    course_id: uuid.UUID | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     """Where the student left off: most recent standalone-practice attempt
-    (test attempts are excluded - those have their own 'resume test' flow)."""
+    (test attempts are excluded - those have their own 'resume test' flow).
+    Optional course_id scopes this to one course (the Course page's primary
+    action needs "left off in THIS course", not just anywhere)."""
+    conditions = [Attempt.user_id == user.id, Attempt.test_attempt_id.is_(None)]
+    if course_id:
+        conditions.append(Attempt.course_id == course_id)
     last = db.execute(
-        select(Attempt)
-        .where(Attempt.user_id == user.id, Attempt.test_attempt_id.is_(None))
-        .order_by(Attempt.attempted_at.desc())
-        .limit(1)
+        select(Attempt).where(*conditions).order_by(Attempt.attempted_at.desc()).limit(1)
     ).scalar_one_or_none()
     if last is None:
         return None

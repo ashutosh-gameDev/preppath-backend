@@ -44,8 +44,8 @@ def get_subject_performance(course_id: uuid.UUID | None = None, user: User = Dep
 
 
 @router.get("/strengths-weaknesses")
-def get_strengths_weaknesses(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    strong, weak = analytics.strong_weak_areas(db, user.id)
+def get_strengths_weaknesses(course_id: uuid.UUID | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    strong, weak = analytics.strong_weak_areas(db, user.id, course_id)
     return {
         "strong": [StrengthWeaknessItem(**s) for s in strong],
         "weak": [StrengthWeaknessItem(**w) for w in weak],

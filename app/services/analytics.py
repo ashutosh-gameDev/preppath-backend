@@ -252,13 +252,16 @@ def subject_performance(db: Session, user_id: uuid.UUID, course_id: uuid.UUID | 
     return subjects
 
 
-def strong_weak_areas(db: Session, user_id: uuid.UUID) -> tuple[list[dict], list[dict]]:
+def strong_weak_areas(db: Session, user_id: uuid.UUID, course_id: uuid.UUID | None = None) -> tuple[list[dict], list[dict]]:
     """
     Strengths/weaknesses at both subject and topic granularity, filtered to
     items with enough attempts to be statistically meaningful (never call a
-    topic a strength off 2 questions).
+    topic a strength off 2 questions). Optionally scoped to one course (see
+    subject_performance's own course_id filter) - the Course page's
+    recommendations use only that course's attempts, never a student's
+    other-course weak spots.
     """
-    subjects = subject_performance(db, user_id)
+    subjects = subject_performance(db, user_id, course_id)
     min_attempts = int(get_setting(db, "analytics.min_attempts_for_signal") or 5)
     strong_th = float(get_setting(db, "analytics.strong_threshold_pct") or 80)
     weak_th = float(get_setting(db, "analytics.weak_threshold_pct") or 70)
