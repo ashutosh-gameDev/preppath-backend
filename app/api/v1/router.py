@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     reminders,
     statistics,
     study_sessions,
+    team_self,
     tests,
     tools,
     users,
@@ -68,6 +69,7 @@ api_router.include_router(ads.router)
 api_router.include_router(reminders.router)
 api_router.include_router(referrals.router)
 api_router.include_router(study_sessions.router)
+api_router.include_router(team_self.router)
 api_router.include_router(dev_auth.router)  # 404s unless ENVIRONMENT=development
 
 # Admin-only

@@ -25,6 +25,9 @@ class PYQPaperUpdate(ORMModel):
     course_id: uuid.UUID | None = None
     max_marks: float | None = None
     time_limit_minutes: int | None = None
+    # Super-admin only (checked in the endpoint) - what this paper pays its
+    # uploader. Null clears the override back to the platform default rate.
+    payment_amount_paise: int | None = None
 
 
 class PYQPaperOut(ORMModel):
@@ -59,6 +62,11 @@ class PYQPaperOut(ORMModel):
     # landing page; a null time_limit_minutes means no countdown/auto-submit.
     max_marks: float | None = None
     time_limit_minutes: int | None = None
+    # This paper's own payout override (paise) - null means "use the
+    # platform default rate" (see intern_payment_service.resolve_rate).
+    # Resolved to an actual number for display alongside this field by the
+    # caller when needed (e.g. the intern payments summary).
+    payment_amount_paise: int | None = None
 
 
 class PYQPaperPreviewOut(ORMModel):

@@ -13,10 +13,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_super_admin
 from app.db.session import get_db
 from app.models.enums import UserRole
+from app.models.intern_payment import InternPayment
 from app.models.user import Profile, User
 from app.schemas.common import Message
+from app.schemas.intern_payment import InternPaymentCreate, InternPaymentSummary
 from app.schemas.team import TeamMemberCreate, TeamMemberOut, TeamMemberPasswordReset
-from app.services import referral_service, team_service
+from app.services import intern_payment_service, referral_service, team_service
 from app.services.admin_log_service import log_action
 
 router = APIRouter(prefix="/admin/team", tags=["admin:team"])
@@ -90,3 +92,43 @@ def delete_team_member(user_id: uuid.UUID, admin: User = Depends(require_super_a
     db.flush()
     log_action(db, admin.id, "delete", "team_member", user_id)
     return Message(detail="Team member removed")
+
+
+def _require_content_editor(db: Session, user_id: uuid.UUID) -> User:
+    member = db.get(User, user_id)
+    if member is None or member.role != UserRole.CONTENT_EDITOR:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    return member
+
+
+@router.get("/{user_id}/payments", response_model=InternPaymentSummary)
+def get_team_member_payments(user_id: uuid.UUID, admin: User = Depends(require_super_admin), db: Session = Depends(get_db)):
+    _require_content_editor(db, user_id)
+    return intern_payment_service.compute_summary(db, user_id)
+
+
+@router.post("/{user_id}/payments", response_model=InternPaymentSummary)
+def record_team_member_payment(
+    user_id: uuid.UUID, payload: InternPaymentCreate, admin: User = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    _require_content_editor(db, user_id)
+    if payload.amount_paise <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+    db.add(InternPayment(user_id=user_id, amount_paise=payload.amount_paise, note=payload.note, created_by=admin.id))
+    db.flush()
+    log_action(db, admin.id, "create", "intern_payment", user_id, {"amount_paise": payload.amount_paise})
+    return intern_payment_service.compute_summary(db, user_id)
+
+
+@router.delete("/{user_id}/payments/{payment_id}", response_model=InternPaymentSummary)
+def delete_team_member_payment(
+    user_id: uuid.UUID, payment_id: uuid.UUID, admin: User = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    _require_content_editor(db, user_id)
+    payment = db.get(InternPayment, payment_id)
+    if payment is None or payment.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    db.delete(payment)
+    db.flush()
+    log_action(db, admin.id, "delete", "intern_payment", payment_id)
+    return intern_payment_service.compute_summary(db, user_id)

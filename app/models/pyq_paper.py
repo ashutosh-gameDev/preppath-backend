@@ -44,6 +44,14 @@ class PYQPaper(Base, UUIDPKMixin, TimestampMixin):
     # Students only see published papers; only a super admin flips this.
     is_published: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
 
+    # What this specific paper pays its uploader, in paise - null means "use
+    # the platform default rate" (PlatformSetting key
+    # intern_payments.default_rate_rupees, see intern_payment_service) rather
+    # than baking a now-stale number into every paper. Super-admin-only to
+    # set (same gate as is_published - see admin/pyq_papers.py), since the
+    # uploader themselves must never be able to price their own work.
+    payment_amount_paise: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Who created this paper tag - same ownership-scoping role as
     # Question.created_by (see admin/pyq_papers.py's _scope_own/_require_owned).
     # Nullable: legacy rows predating this column, backfilled from their

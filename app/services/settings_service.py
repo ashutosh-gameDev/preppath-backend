@@ -55,6 +55,11 @@ DEFAULTS: dict[str, Any] = {
     # study_leaderboard_service.py).
     "study_leaderboard.winner_count": 10,
     "study_leaderboard.reward_days": 30,
+    # Default per-paper payout (rupees, not paise - this is a plain
+    # admin-typed settings value) for an intern's PYQ paper upload, used
+    # whenever that paper's own payment_amount_paise is unset. See
+    # intern_payment_service.py.
+    "intern_payments.default_rate_rupees": 5,
 }
 
 

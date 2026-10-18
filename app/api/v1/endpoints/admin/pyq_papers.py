@@ -62,6 +62,7 @@ def _to_out(paper: PYQPaper, count: int, needs_image_count: int = 0, image_count
         course_id=paper.course_id, is_published=paper.is_published, created_at=paper.created_at, question_count=count,
         needs_image_count=needs_image_count, uploaded_by=paper.uploaded_by, created_by=paper.created_by,
         image_count=image_count, max_marks=paper.max_marks, time_limit_minutes=paper.time_limit_minutes,
+        payment_amount_paise=paper.payment_amount_paise,
     )
 
 
@@ -181,6 +182,8 @@ def update_pyq_paper(
 ):
     paper = _require_owned(db.get(PYQPaper, paper_id), admin)
     changes = payload.model_dump(exclude_unset=True)
+    if "payment_amount_paise" in changes and admin.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="Only a super admin can set a paper's payment amount.")
     publish = changes.pop("is_published", None)
     if publish is not None and publish != paper.is_published:
         if admin.role != UserRole.SUPER_ADMIN:
