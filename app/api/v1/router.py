@@ -5,6 +5,7 @@ from app.api.v1.endpoints import (
     attempts,
     auth,
     bookmarks,
+    course_notes,
     courses,
     decks,
     dev_auth,
@@ -31,6 +32,7 @@ from app.api.v1.endpoints import (
 from app.api.v1.endpoints.admin import (
     ads as admin_ads,
     backup as admin_backup,
+    course_notes as admin_course_notes,
     courses as admin_courses,
     dashboard as admin_dashboard,
     decks as admin_decks,
@@ -73,11 +75,13 @@ api_router.include_router(referrals.router)
 api_router.include_router(study_sessions.router)
 api_router.include_router(team_self.router)
 api_router.include_router(videos.router)
+api_router.include_router(course_notes.router)
 api_router.include_router(dev_auth.router)  # 404s unless ENVIRONMENT=development
 
 # Admin-only
 api_router.include_router(admin_dashboard.router)
 api_router.include_router(admin_backup.router)
+api_router.include_router(admin_course_notes.router)
 api_router.include_router(admin_ads.router)
 api_router.include_router(admin_courses.router)
 api_router.include_router(admin_questions.router)
