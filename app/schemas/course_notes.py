@@ -38,6 +38,7 @@ class CourseNotePageMetaOut(ORMModel):
     reasoning as the personal Notes Board's NotePageMetaOut."""
     id: uuid.UUID
     subject_id: uuid.UUID
+    subject_name: str
     title: str
     background: str
     order_index: int

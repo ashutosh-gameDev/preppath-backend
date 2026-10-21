@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
+from app.models.course import Subject
 from app.models.course_notes import CourseNotePage
 from app.models.enrollment import CourseEnrollment
 from app.models.user import User
@@ -30,11 +31,19 @@ def _require_enrolled(db: Session, user: User, course_id: uuid.UUID) -> None:
 @router.get("", response_model=list[CourseNotePageMetaOut])
 def list_course_notes(course_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     _require_enrolled(db, user, course_id)
-    return db.execute(
-        select(CourseNotePage)
+    rows = db.execute(
+        select(CourseNotePage, Subject.name)
+        .join(Subject, Subject.id == CourseNotePage.subject_id)
         .where(CourseNotePage.course_id == course_id, CourseNotePage.is_published.is_(True))
         .order_by(CourseNotePage.order_index)
-    ).scalars().all()
+    ).all()
+    return [
+        CourseNotePageMetaOut(
+            id=page.id, subject_id=page.subject_id, subject_name=subject_name,
+            title=page.title, background=page.background, order_index=page.order_index,
+        )
+        for page, subject_name in rows
+    ]
 
 
 @router.get("/{page_id}", response_model=CourseNotePageStudentOut)
