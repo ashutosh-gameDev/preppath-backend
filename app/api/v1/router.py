@@ -34,6 +34,7 @@ from app.api.v1.endpoints.admin import (
     courses as admin_courses,
     dashboard as admin_dashboard,
     decks as admin_decks,
+    demographics as admin_demographics,
     growth as admin_growth,
     job_postings as admin_job_postings,
     pyq_papers as admin_pyq_papers,
@@ -88,3 +89,4 @@ api_router.include_router(admin_users.router)
 api_router.include_router(admin_settings.router)
 api_router.include_router(admin_team.router)
 api_router.include_router(admin_growth.router)
+api_router.include_router(admin_demographics.router)
