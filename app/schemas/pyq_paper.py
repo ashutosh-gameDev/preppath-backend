@@ -122,3 +122,33 @@ class PyqSubmitResult(ORMModel):
     skipped_count: int
     accuracy: float
     review: list[QuestionReviewOut]
+
+
+class PyqTopicAnalytics(ORMModel):
+    topic_id: uuid.UUID
+    topic_name: str
+    correct: int
+    incorrect: int
+    skipped: int
+    total: int
+    accuracy: float
+
+
+class PyqSubjectAnalytics(ORMModel):
+    subject_id: uuid.UUID
+    subject_name: str
+    correct: int
+    incorrect: int
+    skipped: int
+    total: int
+    accuracy: float
+    topics: list[PyqTopicAnalytics]
+
+
+class PyqPaperAnalyticsOut(ORMModel):
+    """Subject/topic breakdown of this student's latest attempt on each of
+    this paper's questions - "how did I do, broken down by subject/topic",
+    not a per-session snapshot (PYQ papers have no persisted attempt/session
+    row, unlike Tests - re-attempting a question just moves which attempt
+    counts as "latest")."""
+    subjects: list[PyqSubjectAnalytics]

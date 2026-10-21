@@ -13,18 +13,27 @@ import uuid
 from collections import Counter
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import distinct, func, or_, select
+from sqlalchemy import case, distinct, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_profile, get_current_user
 from app.db.session import get_db
 from app.models.attempt import Attempt
+from app.models.course import Subject, Topic
 from app.models.enrollment import CourseEnrollment
 from app.models.enums import ContentStatus
 from app.models.pyq_paper import PYQPaper
 from app.models.question import Question
 from app.models.user import Profile, User
-from app.schemas.pyq_paper import PYQPaperProgressOut, PYQPaperStudentOut, PyqSubmitRequest, PyqSubmitResult
+from app.schemas.pyq_paper import (
+    PYQPaperProgressOut,
+    PYQPaperStudentOut,
+    PyqPaperAnalyticsOut,
+    PyqSubjectAnalytics,
+    PyqSubmitRequest,
+    PyqSubmitResult,
+    PyqTopicAnalytics,
+)
 from app.schemas.question import QuestionAttemptOut, QuestionReviewOut
 from app.services.achievements_service import check_and_award
 from app.services.attempt_service import record_practice_answer
@@ -231,3 +240,91 @@ def get_paper_progress(paper_id: uuid.UUID, user: User = Depends(get_current_use
         .where(Attempt.user_id == user.id, Question.pyq_paper_id == paper.id)
     ).scalars().all()
     return PYQPaperProgressOut(attempted_ids=list(ids))
+
+
+@router.get("/papers/{paper_id}/analytics", response_model=PyqPaperAnalyticsOut)
+def get_paper_analytics(paper_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Subject/topic breakdown of this student's attempt on this paper - the
+    "Practice again" screen's analytics button. Uses each question's MOST
+    RECENT attempt (same "latest per question" pattern as the Mistake Book),
+    not every historical attempt, since re-practicing a question should
+    update where it's counted, not double it up."""
+    paper, _ = _get_visible_paper(db, user, paper_id)
+
+    latest_per_question = (
+        select(Attempt.question_id, func.max(Attempt.attempted_at).label("latest_at"))
+        .join(Question, Question.id == Attempt.question_id)
+        .where(Attempt.user_id == user.id, Question.pyq_paper_id == paper.id)
+        .group_by(Attempt.question_id)
+        .subquery()
+    )
+    latest_attempts = (
+        select(Attempt)
+        .join(
+            latest_per_question,
+            (Attempt.question_id == latest_per_question.c.question_id)
+            & (Attempt.attempted_at == latest_per_question.c.latest_at),
+        )
+        .where(Attempt.user_id == user.id)
+        .subquery()
+    )
+
+    subj_rows = db.execute(
+        select(
+            latest_attempts.c.subject_id,
+            Subject.name,
+            func.coalesce(func.sum(case((latest_attempts.c.is_correct.is_(True), 1), else_=0)), 0),
+            func.coalesce(func.sum(case((latest_attempts.c.is_correct.is_(False), 1), else_=0)), 0),
+            func.coalesce(func.sum(case((latest_attempts.c.selected_option.is_(None), 1), else_=0)), 0),
+            func.count(),
+        )
+        .join(Subject, Subject.id == latest_attempts.c.subject_id)
+        .group_by(latest_attempts.c.subject_id, Subject.name)
+    ).all()
+
+    topic_rows = db.execute(
+        select(
+            latest_attempts.c.subject_id,
+            latest_attempts.c.topic_id,
+            Topic.name,
+            func.coalesce(func.sum(case((latest_attempts.c.is_correct.is_(True), 1), else_=0)), 0),
+            func.coalesce(func.sum(case((latest_attempts.c.is_correct.is_(False), 1), else_=0)), 0),
+            func.coalesce(func.sum(case((latest_attempts.c.selected_option.is_(None), 1), else_=0)), 0),
+            func.count(),
+        )
+        .join(Topic, Topic.id == latest_attempts.c.topic_id)
+        .where(latest_attempts.c.topic_id.is_not(None))
+        .group_by(latest_attempts.c.subject_id, latest_attempts.c.topic_id, Topic.name)
+    ).all()
+
+    topics_by_subject: dict[uuid.UUID, list[PyqTopicAnalytics]] = {}
+    for subject_id, topic_id, name, correct, incorrect, skipped, total in topic_rows:
+        topics_by_subject.setdefault(subject_id, []).append(
+            PyqTopicAnalytics(
+                topic_id=topic_id,
+                topic_name=name,
+                correct=correct,
+                incorrect=incorrect,
+                skipped=skipped,
+                total=total,
+                accuracy=round(100 * correct / (correct + incorrect), 1) if (correct + incorrect) else 0.0,
+            )
+        )
+
+    subjects = []
+    for subject_id, name, correct, incorrect, skipped, total in subj_rows:
+        answered = correct + incorrect
+        subjects.append(
+            PyqSubjectAnalytics(
+                subject_id=subject_id,
+                subject_name=name,
+                correct=correct,
+                incorrect=incorrect,
+                skipped=skipped,
+                total=total,
+                accuracy=round(100 * correct / answered, 1) if answered else 0.0,
+                topics=sorted(topics_by_subject.get(subject_id, []), key=lambda t: t.accuracy),
+            )
+        )
+    subjects.sort(key=lambda s: s.accuracy)
+    return PyqPaperAnalyticsOut(subjects=subjects)
