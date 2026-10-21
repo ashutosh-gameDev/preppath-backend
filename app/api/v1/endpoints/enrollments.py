@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.attempt import Attempt
-from app.models.course import Course
+from app.models.course import Course, Subject, Subtopic, SubtopicProgress, Topic, TopicProgress
 from app.models.enrollment import CourseEnrollment
 from app.models.enums import ContentStatus
 from app.models.question import Question
@@ -59,6 +59,40 @@ def list_my_enrollments(user: User = Depends(get_current_user), db: Session = De
         accuracy = round(100 * correct_row / answered_row, 1) if answered_row else 0.0
         progress_pct = round(100 * distinct_questions / total_questions, 1) if total_questions else 0.0
 
+        total_topics = db.execute(
+            select(func.count(Topic.id))
+            .join(Subject, Subject.id == Topic.subject_id)
+            .where(Subject.course_id == course.id, Topic.is_published.is_(True))
+        ).scalar_one()
+        total_subtopics = db.execute(
+            select(func.count(Subtopic.id))
+            .join(Topic, Topic.id == Subtopic.topic_id)
+            .join(Subject, Subject.id == Topic.subject_id)
+            .where(Subject.course_id == course.id, Subtopic.is_published.is_(True))
+        ).scalar_one()
+        completed_topics = db.execute(
+            select(func.count(TopicProgress.id))
+            .join(Topic, Topic.id == TopicProgress.topic_id)
+            .join(Subject, Subject.id == Topic.subject_id)
+            .where(TopicProgress.user_id == user.id, TopicProgress.is_completed.is_(True), Subject.course_id == course.id)
+        ).scalar_one()
+        completed_subtopics = db.execute(
+            select(func.count(SubtopicProgress.id))
+            .join(Subtopic, Subtopic.id == SubtopicProgress.subtopic_id)
+            .join(Topic, Topic.id == Subtopic.topic_id)
+            .join(Subject, Subject.id == Topic.subject_id)
+            .where(
+                SubtopicProgress.user_id == user.id,
+                SubtopicProgress.is_completed.is_(True),
+                Subject.course_id == course.id,
+            )
+        ).scalar_one()
+        total_syllabus_items = total_topics + total_subtopics
+        completed_syllabus_items = completed_topics + completed_subtopics
+        syllabus_completion_pct = (
+            round(100 * completed_syllabus_items / total_syllabus_items, 1) if total_syllabus_items else 0.0
+        )
+
         out.append(
             EnrolledCourseOut(
                 course=course,
@@ -66,6 +100,7 @@ def list_my_enrollments(user: User = Depends(get_current_user), db: Session = De
                 questions_attempted=answered_row,
                 accuracy=accuracy,
                 progress_pct=min(100.0, progress_pct),
+                syllabus_completion_pct=min(100.0, syllabus_completion_pct),
                 target_exam_date=e.target_exam_date,
             )
         )

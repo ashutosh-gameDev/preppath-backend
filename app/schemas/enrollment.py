@@ -20,5 +20,12 @@ class EnrolledCourseOut(ORMModel):
     enrolled_at: str
     questions_attempted: int
     accuracy: float
+    # Question coverage - distinct questions attempted / total published
+    # questions. Despite the name, NOT syllabus completion - see
+    # syllabus_completion_pct for that.
     progress_pct: float
+    # Topics + subtopics marked complete / total published topics +
+    # subtopics - what the student has actually ticked off, independent of
+    # question practice.
+    syllabus_completion_pct: float
     target_exam_date: date | None = None
