@@ -46,7 +46,7 @@ def _plans_out() -> list[PlanOut]:
     return [
         PlanOut(
             key=p.key, label=p.label, amount_paise=p.amount_paise, amount_rupees=p.amount_paise / 100,
-            duration_days=p.duration_days, tier=p.tier,
+            duration_days=p.duration_days, tier=p.tier, google_play_product_id=p.google_play_product_id,
         )
         for p in premium_service.PLANS.values()
     ]

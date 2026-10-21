@@ -11,6 +11,7 @@ class PlanOut(ORMModel):
     amount_rupees: float
     duration_days: int
     tier: str
+    google_play_product_id: str
 
 
 class CheckoutRequest(ORMModel):
