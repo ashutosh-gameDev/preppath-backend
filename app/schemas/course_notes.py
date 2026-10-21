@@ -6,10 +6,10 @@ from app.schemas.common import ORMModel
 class CourseNotePageIn(ORMModel):
     subject_id: uuid.UUID
     title: str = "Untitled"
-    # "paper-white" is the default for official notes - see
-    # notes-ai-prompt/notes-layout on the admin-web side, which write ink-dark
-    # text meant for a white page, not the dark grid styles.
-    background: str = "paper-white"
+    # The infinite-canvas board itself stays the dark/gray grid - the
+    # "milky paper" look lives on each chapter's Frame card instead (see
+    # notes-layout.ts/canvas-editor.tsx), not the whole board.
+    background: str = "grid-gray"
     canvas_json: str = "{}"
     order_index: int = 0
     is_published: bool = False
