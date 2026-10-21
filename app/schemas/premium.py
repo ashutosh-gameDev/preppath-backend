@@ -39,6 +39,11 @@ class DevCompleteRequest(ORMModel):
     payment_id: uuid.UUID
 
 
+class GooglePlayVerifyRequest(ORMModel):
+    product_id: str
+    purchase_token: str
+
+
 class PremiumStatusOut(ORMModel):
     is_premium: bool
     tier: str

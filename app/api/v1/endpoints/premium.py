@@ -30,11 +30,12 @@ from app.schemas.premium import (
     CheckoutRequest,
     CheckoutResponse,
     DevCompleteRequest,
+    GooglePlayVerifyRequest,
     PlanOut,
     PremiumStatusOut,
     VerifyRequest,
 )
-from app.services import premium_service
+from app.services import google_play_service, premium_service
 
 router = APIRouter(prefix="/premium", tags=["premium"])
 
@@ -165,6 +166,60 @@ def verify(
     premium_service.mark_paid(db, payment, payload.razorpay_payment_id, payload.razorpay_signature)
     if plan:
         premium_service.grant_premium(db, profile, plan)
+
+    return PremiumStatusOut(
+        is_premium=premium_service.is_premium(profile),
+        tier=premium_service.effective_tier(profile),
+        tier_expires_at=profile.tier_expires_at,
+        plans=_plans_out(),
+    )
+
+
+@router.post("/google-play/verify", response_model=PremiumStatusOut)
+def google_play_verify(
+    payload: GooglePlayVerifyRequest,
+    user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_active_profile),
+    db: Session = Depends(get_db),
+):
+    """Android-app-only path (see /checkout + /verify above for the web
+    Razorpay flow) - Play policy requires any in-app digital-goods purchase
+    to go through Play Billing, not Razorpay. The app itself already ran
+    the Play Billing purchase flow (native-purchases plugin) before calling
+    this; here we independently re-verify the token with Google rather than
+    trusting the client's say-so, then grant the same tier/tier_expires_at
+    the Razorpay path grants."""
+    if not google_play_service.configured():
+        raise HTTPException(status_code=500, detail="Google Play purchases are not configured on this server")
+
+    plan = premium_service.get_plan_by_google_play_product_id(payload.product_id)
+    if plan is None:
+        raise HTTPException(status_code=400, detail="Unknown product")
+
+    if not google_play_service.verify_purchase(payload.product_id, payload.purchase_token):
+        raise HTTPException(status_code=400, detail="Purchase could not be verified with Google Play")
+
+    payment = db.execute(
+        select(Payment).where(Payment.google_play_purchase_token == payload.purchase_token)
+    ).scalar_one_or_none()
+    if payment is None:
+        payment = Payment(
+            user_id=user.id, plan=plan.key, amount_paise=plan.amount_paise, provider="google_play",
+            google_play_product_id=payload.product_id, google_play_purchase_token=payload.purchase_token,
+        )
+        db.add(payment)
+        db.flush()
+
+    # Guard against double-granting if this same token is ever verified
+    # twice (e.g. a client retry after a network hiccup) - mark_paid alone
+    # is idempotent but grant_premium is not, so check status BEFORE
+    # marking it paid.
+    already_paid = payment.status == "paid"
+    premium_service.mark_paid(db, payment)
+    if not already_paid:
+        premium_service.grant_premium(db, profile, plan)
+
+    google_play_service.acknowledge_purchase(payload.product_id, payload.purchase_token)
 
     return PremiumStatusOut(
         is_premium=premium_service.is_premium(profile),

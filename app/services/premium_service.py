@@ -23,17 +23,27 @@ class Plan:
     # plans currently grant PREMIUM; PRO is admin-assigned only for now (see
     # the Users admin page) until a separate self-serve Pro product exists.
     tier: str = UserTier.PREMIUM
+    # The matching one-time "managed product" ID to create in Play Console
+    # (Monetize -> Products -> In-app products) for the Android app's Play
+    # Billing flow - these are fixed-duration passes, not auto-renewing, so
+    # a one-time managed product is the right Play Billing primitive, not a
+    # subscription. Must match exactly what's created there.
+    google_play_product_id: str = ""
 
 
 PLANS: dict[str, Plan] = {
-    "monthly": Plan(key="monthly", label="Monthly", amount_paise=5000, duration_days=30),
-    "half_yearly": Plan(key="half_yearly", label="6 Months", amount_paise=25000, duration_days=180),
-    "yearly": Plan(key="yearly", label="Yearly", amount_paise=50000, duration_days=365),
+    "monthly": Plan(key="monthly", label="Monthly", amount_paise=5000, duration_days=30, google_play_product_id="premium_monthly"),
+    "half_yearly": Plan(key="half_yearly", label="6 Months", amount_paise=25000, duration_days=180, google_play_product_id="premium_half_yearly"),
+    "yearly": Plan(key="yearly", label="Yearly", amount_paise=50000, duration_days=365, google_play_product_id="premium_yearly"),
 }
 
 
 def get_plan(key: str) -> Plan | None:
     return PLANS.get(key)
+
+
+def get_plan_by_google_play_product_id(product_id: str) -> Plan | None:
+    return next((p for p in PLANS.values() if p.google_play_product_id == product_id), None)
 
 
 def effective_tier(profile: Profile) -> str:

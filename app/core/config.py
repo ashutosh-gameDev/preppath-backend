@@ -47,6 +47,18 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_SECRET: str = ""
     RAZORPAY_WEBHOOK_SECRET: str = ""
 
+    # Google Play Billing (Android app purchases - Play policy requires this
+    # for any in-app digital-goods purchase, Razorpay can't be used there).
+    # GOOGLE_PLAY_SERVICE_ACCOUNT_JSON is the raw JSON content of a service
+    # account key with access to this app in Play Console (Setup -> API
+    # access -> create/link a service account, grant it "View financial
+    # data" + release permissions, download its key). Leave both blank to
+    # hard-disable the /premium/google-play/verify route - there's no
+    # dev-mode mock for this one, it only matters once a real Play Store
+    # build is being tested (see services/google_play_service.py).
+    GOOGLE_PLAY_PACKAGE_NAME: str = ""
+    GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]

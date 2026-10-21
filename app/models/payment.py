@@ -31,6 +31,13 @@ class Payment(Base, UUIDPKMixin):
     razorpay_payment_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     razorpay_signature: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # "razorpay" (web) | "google_play" (the Android app, required by Play
+    # policy for any in-app digital-goods purchase - see premium.py's
+    # google-play/verify route).
+    provider: Mapped[str] = mapped_column(String(20), default="razorpay", nullable=False)
+    google_play_product_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    google_play_purchase_token: Mapped[str | None] = mapped_column(String(500), nullable=True, index=True)
+
     status: Mapped[str] = mapped_column(String(20), default="created", nullable=False)  # created | paid | failed
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
