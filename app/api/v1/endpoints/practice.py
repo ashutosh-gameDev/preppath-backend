@@ -18,6 +18,7 @@ from app.models.user import Profile, User
 from app.schemas.attempt import PracticeAnswerRequest, PracticeAnswerResult, PracticeSessionRequest
 from app.schemas.gamification import DailyChallengeOut
 from app.schemas.question import QuestionAttemptOut
+from app.services.achievements_service import check_and_award
 from app.services.attempt_service import record_practice_answer
 from app.services.settings_service import get_setting
 
@@ -82,6 +83,7 @@ def submit_practice_answer(
     attempt = record_practice_answer(
         db, profile, question, payload.selected_option, payload.time_taken_seconds
     )
+    check_and_award(db, profile)
 
     return PracticeAnswerResult(
         is_correct=attempt.is_correct,

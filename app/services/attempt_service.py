@@ -1,8 +1,17 @@
 """
 Recording a single practice-question attempt: writes the `Attempt` row,
-awards XP, updates cached `Profile` counters/streak, and checks achievements.
-Test-attempt scoring (many questions at once) lives in `test_service.py` but
-also writes through `Attempt` rows so both paths feed the same analytics.
+awards XP, and updates cached `Profile` counters/streak. Test-attempt
+scoring (many questions at once) lives in `test_service.py` but also writes
+through `Attempt` rows so both paths feed the same analytics.
+
+Deliberately does NOT call achievements_service.check_and_award itself -
+that does a couple of queries (one of them, the global-rank achievement,
+a real aggregate over all users) and used to run after EVERY question, so
+submitting an N-question PYQ paper/test did N round trips of work that only
+needed to happen once against the final, fully-updated profile counters.
+Callers that record several answers in a loop (pyq.py, test_service.py)
+call check_and_award ONCE after their loop; single-answer callers
+(practice.py) call it once right after this returns.
 """
 import uuid
 from datetime import datetime, timezone
@@ -14,7 +23,6 @@ from app.models.enums import XPReason
 from app.models.question import Question
 from app.models.user import Profile
 from app.services import xp_service
-from app.services.achievements_service import check_and_award
 
 
 def record_practice_answer(
@@ -61,5 +69,4 @@ def record_practice_answer(
                 xp_service.award_xp(db, profile, participation, XPReason.QUESTION_ATTEMPT, "question", question.id)
 
     db.flush()
-    check_and_award(db, profile)
     return attempt

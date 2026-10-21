@@ -26,6 +26,7 @@ from app.models.question import Question
 from app.models.user import Profile, User
 from app.schemas.pyq_paper import PYQPaperProgressOut, PYQPaperStudentOut, PyqSubmitRequest, PyqSubmitResult
 from app.schemas.question import QuestionAttemptOut, QuestionReviewOut
+from app.services.achievements_service import check_and_award
 from app.services.attempt_service import record_practice_answer
 
 router = APIRouter(prefix="/pyq", tags=["pyq"])
@@ -211,6 +212,8 @@ def submit_paper(
         else:
             incorrect += 1
         review.append(QuestionReviewOut.model_validate(question))
+
+    check_and_award(db, profile)
 
     answered = correct + incorrect
     accuracy = round(100 * correct / answered, 1) if answered else 0.0
