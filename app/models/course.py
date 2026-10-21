@@ -107,3 +107,20 @@ class TopicProgress(Base, UUIDPKMixin):
     is_completed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     needs_revision: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class SubtopicProgress(Base, UUIDPKMixin):
+    """Same mark-complete/needs-revision tracking as TopicProgress, one level
+    down - a student can work through a topic's subtopics individually."""
+    __tablename__ = "subtopic_progress"
+    __table_args__ = (UniqueConstraint("user_id", "subtopic_id", name="uq_subtopic_progress_user_subtopic"),)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    subtopic_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("subtopics.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    needs_revision: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

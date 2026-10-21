@@ -65,6 +65,17 @@ class TopicProgressOut(ORMModel):
     needs_revision: bool = False
 
 
+class SubtopicProgressIn(ORMModel):
+    is_completed: bool | None = None
+    needs_revision: bool | None = None
+
+
+class SubtopicProgressOut(ORMModel):
+    subtopic_id: uuid.UUID
+    is_completed: bool
+    needs_revision: bool = False
+
+
 class CustomTopicCreate(ORMModel):
     subject_id: uuid.UUID
     name: str

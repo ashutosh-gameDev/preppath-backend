@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models.course import Course, Subject, Topic, TopicProgress
+from app.models.course import Course, Subject, Subtopic, SubtopicProgress, Topic, TopicProgress
 from app.models.custom_topic import CustomTopic
 from app.models.user import User
 from app.schemas.common import Message
@@ -18,6 +18,8 @@ from app.schemas.course import (
     CustomTopicCreate,
     CustomTopicOut,
     CustomTopicUpdate,
+    SubtopicProgressIn,
+    SubtopicProgressOut,
     TopicProgressIn,
     TopicProgressOut,
 )
@@ -83,6 +85,54 @@ def set_topic_progress(
             TopicProgress(
                 user_id=user.id,
                 topic_id=topic_id,
+                is_completed=is_completed,
+                completed_at=datetime.now(timezone.utc) if is_completed else None,
+                needs_revision=payload.needs_revision or False,
+            )
+        )
+    else:
+        if payload.is_completed is not None:
+            existing.is_completed = payload.is_completed
+            existing.completed_at = datetime.now(timezone.utc) if payload.is_completed else None
+        if payload.needs_revision is not None:
+            existing.needs_revision = payload.needs_revision
+    db.flush()
+    return Message(detail="Progress updated")
+
+
+@router.get("/{course_id}/subtopic-progress", response_model=list[SubtopicProgressOut])
+def get_course_subtopic_progress(
+    course_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Same shape as /{course_id}/progress, one level down."""
+    rows = db.execute(
+        select(SubtopicProgress.subtopic_id, SubtopicProgress.is_completed, SubtopicProgress.needs_revision)
+        .join(Subtopic, Subtopic.id == SubtopicProgress.subtopic_id)
+        .join(Topic, Topic.id == Subtopic.topic_id)
+        .join(Subject, Subject.id == Topic.subject_id)
+        .where(SubtopicProgress.user_id == user.id, Subject.course_id == course_id)
+    ).all()
+    return [SubtopicProgressOut(subtopic_id=r[0], is_completed=r[1], needs_revision=r[2]) for r in rows]
+
+
+@router.put("/subtopics/{subtopic_id}/progress", response_model=Message)
+def set_subtopic_progress(
+    subtopic_id: uuid.UUID, payload: SubtopicProgressIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Upserts the caller's progress row for this subtopic - same
+    either-field-alone semantics as set_topic_progress."""
+    subtopic = db.get(Subtopic, subtopic_id)
+    if subtopic is None:
+        raise HTTPException(status_code=404, detail="Subtopic not found")
+    existing = db.execute(
+        select(SubtopicProgress).where(SubtopicProgress.user_id == user.id, SubtopicProgress.subtopic_id == subtopic_id)
+    ).scalar_one_or_none()
+    if existing is None:
+        is_completed = payload.is_completed if payload.is_completed is not None else True
+        db.add(
+            SubtopicProgress(
+                user_id=user.id,
+                subtopic_id=subtopic_id,
                 is_completed=is_completed,
                 completed_at=datetime.now(timezone.utc) if is_completed else None,
                 needs_revision=payload.needs_revision or False,
