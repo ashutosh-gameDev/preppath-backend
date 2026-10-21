@@ -6,7 +6,10 @@ from app.schemas.common import ORMModel
 class CourseNotePageIn(ORMModel):
     subject_id: uuid.UUID
     title: str = "Untitled"
-    background: str = "grid-dark"
+    # "paper-white" is the default for official notes - see
+    # notes-ai-prompt/notes-layout on the admin-web side, which write ink-dark
+    # text meant for a white page, not the dark grid styles.
+    background: str = "paper-white"
     canvas_json: str = "{}"
     order_index: int = 0
     is_published: bool = False
