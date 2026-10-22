@@ -60,6 +60,13 @@ DEFAULTS: dict[str, Any] = {
     # whenever that paper's own payment_amount_paise is unset. See
     # intern_payment_service.py.
     "intern_payments.default_rate_rupees": 5,
+    # A paper needing MORE than this many images (summed across every
+    # question's stem + 4 option image slots) pays the higher rate below
+    # instead of the plain default - sourcing/cropping a lot of pictures is
+    # real extra work beyond typing in the question text. Only applies when
+    # the paper's own payment_amount_paise isn't manually set.
+    "intern_payments.image_threshold": 5,
+    "intern_payments.high_image_rate_rupees": 10,
 }
 
 

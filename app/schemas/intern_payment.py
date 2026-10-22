@@ -30,6 +30,10 @@ class InternPaperBrief(ORMModel):
     # amount_paise above is never null) means this row is currently priced
     # at the platform default rate, not a paper-specific one.
     payment_amount_paise: int | None
+    # Why amount_paise came out the way it did - shown alongside it so an
+    # admin can tell "high-image rate" from "plain default" at a glance,
+    # without having to check the question images themselves.
+    image_count: int
 
 
 class InternPaymentSummary(ORMModel):
