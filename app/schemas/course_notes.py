@@ -25,13 +25,26 @@ class CourseNotePageUpdate(ORMModel):
 
 
 class CourseNotePageAdminOut(ORMModel):
-    """Full row, for the CRM list/editor."""
+    """Full row, for the CRM editor (one page at a time)."""
     id: uuid.UUID
     course_id: uuid.UUID
     subject_id: uuid.UUID
     title: str
     background: str
     canvas_json: str
+    order_index: int
+    is_published: bool
+
+
+class CourseNotePageAdminMetaOut(ORMModel):
+    """CRM list view - excludes canvas_json (can be large), same reasoning
+    as the student-facing CourseNotePageMetaOut below. The editor fetches
+    one page's full row separately (GET /admin/course-notes/{id})."""
+    id: uuid.UUID
+    course_id: uuid.UUID
+    subject_id: uuid.UUID
+    title: str
+    background: str
     order_index: int
     is_published: bool
 

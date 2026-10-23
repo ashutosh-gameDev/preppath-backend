@@ -10,7 +10,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.api.deps import require_content_access
 from app.db.session import get_db
@@ -18,18 +18,44 @@ from app.models.course import Subject
 from app.models.course_notes import CourseNotePage
 from app.models.user import User
 from app.schemas.common import Message
-from app.schemas.course_notes import CourseNotePageAdminOut, CourseNotePageIn, CourseNotePageUpdate
+from app.schemas.course_notes import CourseNotePageAdminMetaOut, CourseNotePageAdminOut, CourseNotePageIn, CourseNotePageUpdate
 
 router = APIRouter(prefix="/admin/course-notes", tags=["admin:course-notes"])
 
 
-@router.get("", response_model=list[CourseNotePageAdminOut])
+@router.get("", response_model=list[CourseNotePageAdminMetaOut])
 def list_course_notes(
     course_id: uuid.UUID, admin: User = Depends(require_content_access), db: Session = Depends(get_db)
 ):
+    # load_only excludes canvas_json from the SELECT itself (not just the
+    # response) - this list can be reloaded a lot (every course switch), and
+    # canvas_json can be large, so this is the difference between shipping
+    # every page's full canvas over the Postgres connection on every load
+    # versus just the row metadata actually shown here.
     return db.execute(
-        select(CourseNotePage).where(CourseNotePage.course_id == course_id).order_by(CourseNotePage.order_index)
+        select(CourseNotePage)
+        .options(
+            load_only(
+                CourseNotePage.id,
+                CourseNotePage.course_id,
+                CourseNotePage.subject_id,
+                CourseNotePage.title,
+                CourseNotePage.background,
+                CourseNotePage.order_index,
+                CourseNotePage.is_published,
+            )
+        )
+        .where(CourseNotePage.course_id == course_id)
+        .order_by(CourseNotePage.order_index)
     ).scalars().all()
+
+
+@router.get("/{page_id}", response_model=CourseNotePageAdminOut)
+def get_course_note(page_id: uuid.UUID, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
+    page = db.get(CourseNotePage, page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail="Note page not found")
+    return page
 
 
 @router.post("", response_model=CourseNotePageAdminOut)
