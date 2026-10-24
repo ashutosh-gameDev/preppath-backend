@@ -35,3 +35,13 @@ def get_course_leaderboard(course_id: uuid.UUID, limit: int = 50, user: User = D
 @router.get("/subject/{subject_id}", response_model=LeaderboardOut)
 def get_subject_leaderboard(subject_id: uuid.UUID, limit: int = 50, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return leaderboard_service.subject_leaderboard(db, subject_id, user.id, limit)
+
+
+@router.get("/pyq-paper/{paper_id}", response_model=LeaderboardOut)
+def get_pyq_paper_leaderboard(paper_id: uuid.UUID, limit: int = 50, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return leaderboard_service.pyq_paper_leaderboard(db, paper_id, user.id, limit)
+
+
+@router.get("/test/{test_id}", response_model=LeaderboardOut)
+def get_test_leaderboard(test_id: uuid.UUID, limit: int = 50, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return leaderboard_service.test_leaderboard(db, test_id, user.id, limit)

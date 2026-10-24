@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.models.attempt import Attempt
 from app.models.gamification import XPTransaction
+from app.models.question import Question
 from app.models.test import Test, TestAttempt
 from app.models.user import Profile, User
 from app.services.settings_service import get_setting
@@ -171,6 +172,73 @@ def course_leaderboard(db: Session, course_id: uuid.UUID, current_user_id: uuid.
     return {
         "scope": "course",
         "scope_label": "Course Leaderboard",
+        "entries": entries,
+        "current_user_rank": current_rank,
+        "current_user_entry": current_entry,
+    }
+
+
+def pyq_paper_leaderboard(db: Session, paper_id: uuid.UUID, current_user_id: uuid.UUID, limit: int = 50) -> dict:
+    """Ranked by accuracy on this specific paper's questions - same signal
+    `GET /pyq/papers/{id}/progress` already uses (Attempt joined through
+    Question.pyq_paper_id), since a PYQ paper has no persisted per-attempt
+    summary row the way a Test does (see submit_paper's own docstring) -
+    "answered this paper's question" is tracked the same way whether it
+    happened via the paper's own submit flow or standalone practice,
+    consistent with how the rest of this codebase already treats it."""
+    answered = func.count(Attempt.id).label("answered")
+    correct = func.coalesce(func.sum(case((Attempt.is_correct.is_(True), 1), else_=0)), 0).label("correct")
+    q = (
+        select(User, answered, correct)
+        .join(Attempt, Attempt.user_id == User.id)
+        .join(Question, Question.id == Attempt.question_id)
+        .where(Question.pyq_paper_id == paper_id, User.is_active.is_(True))
+        .group_by(User.id)
+        .having(answered > 0)
+    )
+    rows = db.execute(q).all()
+    scored = [(u, round(100 * c / a, 1) if a else 0.0, a) for u, a, c in rows]
+    scored.sort(key=lambda r: (-r[1], -r[2]))
+    scored = scored[:limit]
+    entries = [_entry(u, acc, acc, a, i + 1, current_user_id) for i, (u, acc, a) in enumerate(scored)]
+    current_rank = next((e["rank"] for e in entries if e["is_current_user"]), None)
+    current_entry = next((e for e in entries if e["is_current_user"]), None)
+    return {
+        "scope": "pyq_paper",
+        "scope_label": "Paper Leaderboard",
+        "entries": entries,
+        "current_user_rank": current_rank,
+        "current_user_entry": current_entry,
+    }
+
+
+def test_leaderboard(db: Session, test_id: uuid.UUID, current_user_id: uuid.UUID, limit: int = 50) -> dict:
+    """Ranked by score percentage on this specific mock test - same shape as
+    course_leaderboard, just scoped to one Test instead of every test in a
+    course."""
+    test = db.get(Test, test_id)
+    total_marks = test.total_marks if test else 0
+    total_questions = test.total_questions if test else 0
+    pct = (100 * TestAttempt.score / func.nullif(total_marks, 0)).label("pct")
+    q = (
+        select(User, pct)
+        .join(TestAttempt, TestAttempt.user_id == User.id)
+        .where(TestAttempt.test_id == test_id, TestAttempt.status == "submitted", User.is_active.is_(True))
+        .order_by(pct.desc())
+        .limit(limit)
+    )
+    rows = db.execute(q).all()
+    # Every entrant answered the same fixed question set, so this is the
+    # test's own total_questions for everyone, not a per-user count.
+    entries = [
+        _entry(u, float(p or 0), round(float(p or 0), 1), total_questions, i + 1, current_user_id)
+        for i, (u, p) in enumerate(rows)
+    ]
+    current_rank = next((e["rank"] for e in entries if e["is_current_user"]), None)
+    current_entry = next((e for e in entries if e["is_current_user"]), None)
+    return {
+        "scope": "test",
+        "scope_label": "Test Leaderboard",
         "entries": entries,
         "current_user_rank": current_rank,
         "current_user_entry": current_entry,
