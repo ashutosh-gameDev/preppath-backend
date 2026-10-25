@@ -13,10 +13,12 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.device_token import DeviceToken
 from app.models.enums import NotificationType
 from app.models.job_posting import JobPosting
 from app.models.notification import Notification
 from app.models.user import Profile
+from app.services import fcm_service
 
 
 def get_feed(db: Session, user_id: uuid.UUID, limit: int = 30) -> list[dict]:
@@ -60,6 +62,26 @@ def create_notification(
     return n
 
 
+def register_device_token(db: Session, user_id: uuid.UUID, token: str, platform: str = "android") -> None:
+    """Upsert by token (not user_id) - the same device re-registers on
+    every app launch, and a token can briefly belong to a previous user on
+    a shared/reused device, so "this token now belongs to this user" should
+    always win rather than ever erroring on a duplicate."""
+    existing = db.execute(select(DeviceToken).where(DeviceToken.token == token)).scalar_one_or_none()
+    if existing:
+        existing.user_id = user_id
+        existing.platform = platform
+    else:
+        db.add(DeviceToken(user_id=user_id, token=token, platform=platform))
+    db.flush()
+
+
+def _push_to_user(db: Session, user_id: uuid.UUID, title: str, body: str, data: dict[str, str] | None = None) -> None:
+    tokens = db.execute(select(DeviceToken.token).where(DeviceToken.user_id == user_id)).scalars().all()
+    for token in tokens:
+        fcm_service.send_push(token, title, body, data)
+
+
 def notify_eligible_students_for_job(db: Session, job: JobPosting) -> int:
     """Called once, exactly when a job posting goes from draft to published
     (see admin/job_postings.py) - never on a later edit of an already-
@@ -78,10 +100,11 @@ def notify_eligible_students_for_job(db: Session, job: JobPosting) -> int:
     if job.qualification:
         conditions.append(Profile.qualification.ilike(job.qualification))
     user_ids = db.execute(select(Profile.user_id).where(*conditions)).scalars().all()
+    message = f"You're eligible for this job posting{f' at {job.organization}' if job.organization else ''}."
     for user_id in user_ids:
         create_notification(
-            db, user_id, NotificationType.JOB_POSTING, job.title,
-            f"You're eligible for this job posting{f' at {job.organization}' if job.organization else ''}.",
+            db, user_id, NotificationType.JOB_POSTING, job.title, message,
             ref_type="job_posting", ref_id=job.id,
         )
+        _push_to_user(db, user_id, job.title, message, {"ref_type": "job_posting", "ref_id": str(job.id)})
     return len(user_ids)

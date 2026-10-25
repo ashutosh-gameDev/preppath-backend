@@ -15,6 +15,7 @@ from app.models.test import Test, TestSection, TestQuestion, TestAttempt  # noqa
 from app.models.attempt import Attempt  # noqa: F401
 from app.models.gamification import XPTransaction, Achievement, UserAchievement  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
+from app.models.device_token import DeviceToken  # noqa: F401
 from app.models.job_posting import JobPosting  # noqa: F401
 from app.models.notes import NoteCategory, NotePage  # noqa: F401
 from app.models.admin import Report, AdminActivityLog, PlatformSetting  # noqa: F401

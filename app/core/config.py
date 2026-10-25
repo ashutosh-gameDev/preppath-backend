@@ -59,6 +59,13 @@ class Settings(BaseSettings):
     GOOGLE_PLAY_PACKAGE_NAME: str = ""
     GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: str = ""
 
+    # Firebase Cloud Messaging (push notifications to the Android app).
+    # FCM_SERVICE_ACCOUNT_JSON is the raw JSON content of a Firebase service
+    # account key (Firebase Console -> Project Settings -> Service accounts
+    # -> Generate new private key). Leave blank to hard-disable sending -
+    # see services/fcm_service.py.
+    FCM_SERVICE_ACCOUNT_JSON: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]

@@ -4,6 +4,11 @@ from datetime import date, datetime
 from app.schemas.common import ORMModel
 
 
+class DeviceTokenIn(ORMModel):
+    token: str
+    platform: str = "android"
+
+
 class NotificationOut(ORMModel):
     id: uuid.UUID | str
     type: str
