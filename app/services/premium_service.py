@@ -32,9 +32,9 @@ class Plan:
 
 
 PLANS: dict[str, Plan] = {
-    "monthly": Plan(key="monthly", label="Monthly", amount_paise=5000, duration_days=30, google_play_product_id="premium_monthly"),
-    "half_yearly": Plan(key="half_yearly", label="6 Months", amount_paise=25000, duration_days=180, google_play_product_id="premium_half_yearly"),
-    "yearly": Plan(key="yearly", label="Yearly", amount_paise=50000, duration_days=365, google_play_product_id="premium_yearly"),
+    "monthly": Plan(key="monthly", label="Monthly", amount_paise=3000, duration_days=30, google_play_product_id="premium_monthly"),
+    "half_yearly": Plan(key="half_yearly", label="6 Months", amount_paise=15000, duration_days=180, google_play_product_id="premium_half_yearly"),
+    "yearly": Plan(key="yearly", label="Yearly", amount_paise=25000, duration_days=365, google_play_product_id="premium_yearly"),
 }
 
 
