@@ -29,6 +29,18 @@ from app.services.notification_service import notify_eligible_students_for_job
 router = APIRouter(prefix="/admin/job-postings", tags=["admin:job-postings"])
 
 
+def _require_source_link(job_type: str | None, apply_link: str | None, is_published: bool) -> None:
+    """Play Store's Misleading Claims policy requires a clear, official
+    source link on any government information shown to users - a published
+    government posting with no apply_link at all leaves students with no
+    way to verify it against the real notification."""
+    if is_published and job_type == "government" and not apply_link:
+        raise HTTPException(
+            status_code=422,
+            detail="A source/apply link is required to publish a government job posting (Play Store policy).",
+        )
+
+
 @router.get("", response_model=list[JobPostingOut])
 def list_job_postings(
     course_id: uuid.UUID | None = None,
@@ -46,6 +58,7 @@ def list_job_postings(
 def create_job_posting(
     payload: JobPostingCreate, admin: User = Depends(require_content_access), db: Session = Depends(get_db)
 ):
+    _require_source_link(payload.job_type, payload.apply_link, payload.is_published)
     posting = JobPosting(**payload.model_dump(), created_by=admin.id)
     db.add(posting)
     db.flush()
@@ -83,6 +96,8 @@ def bulk_import_job_postings(
     response has none - the browser then reports a plain 500 as a CORS
     policy violation, which is what actually happened here before this
     import hit a VARCHAR(100) qualification column (see migration 0032)."""
+    for item in payload.postings:
+        _require_source_link(item.job_type, item.apply_link, item.is_published)
     created: list[JobPosting] = [JobPosting(**item.model_dump(), created_by=admin.id) for item in payload.postings]
     db.add_all(created)
     try:
@@ -113,6 +128,7 @@ def update_job_posting(
     was_published = posting.is_published
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(posting, field, value)
+    _require_source_link(posting.job_type, posting.apply_link, posting.is_published)
     db.flush()
     log_action(db, admin.id, "update", "job_posting", posting.id)
     # Only the draft -> published transition notifies - saving an already-
