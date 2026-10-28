@@ -139,6 +139,8 @@ def list_course_papers(
             attempted_count=done.get(p.id, 0),
             max_marks=p.max_marks,
             time_limit_minutes=p.time_limit_minutes,
+            marks_per_question=p.marks_per_question,
+            negative_marking=p.negative_marking,
         )
         for p in papers
         if totals.get(p.id, 0) > 0
@@ -170,6 +172,8 @@ def get_paper_detail(paper_id: uuid.UUID, user: User = Depends(get_current_user)
         attempted_count=attempted_count,
         max_marks=paper.max_marks,
         time_limit_minutes=paper.time_limit_minutes,
+        marks_per_question=paper.marks_per_question,
+        negative_marking=paper.negative_marking,
     )
 
 
@@ -226,7 +230,12 @@ def submit_paper(
 
     answered = correct + incorrect
     accuracy = round(100 * correct / answered, 1) if answered else 0.0
-    return PyqSubmitResult(correct_count=correct, incorrect_count=incorrect, skipped_count=skipped, accuracy=accuracy, review=review)
+    score = round(correct * paper.marks_per_question - incorrect * paper.negative_marking, 2)
+    max_score = round(len(paper_question_ids) * paper.marks_per_question, 2)
+    return PyqSubmitResult(
+        correct_count=correct, incorrect_count=incorrect, skipped_count=skipped, accuracy=accuracy,
+        score=score, max_score=max_score, review=review,
+    )
 
 
 @router.get("/papers/{paper_id}/progress", response_model=PYQPaperProgressOut)

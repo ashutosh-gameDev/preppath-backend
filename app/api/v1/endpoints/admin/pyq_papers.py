@@ -62,6 +62,7 @@ def _to_out(paper: PYQPaper, count: int, needs_image_count: int = 0, image_count
         course_id=paper.course_id, is_published=paper.is_published, created_at=paper.created_at, question_count=count,
         needs_image_count=needs_image_count, uploaded_by=paper.uploaded_by, created_by=paper.created_by,
         image_count=image_count, max_marks=paper.max_marks, time_limit_minutes=paper.time_limit_minutes,
+        marks_per_question=paper.marks_per_question, negative_marking=paper.negative_marking,
         payment_amount_paise=paper.payment_amount_paise,
     )
 

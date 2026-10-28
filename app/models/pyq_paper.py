@@ -41,6 +41,19 @@ class PYQPaper(Base, UUIDPKMixin, TimestampMixin):
     max_marks: Mapped[float | None] = mapped_column(Float, nullable=True)
     time_limit_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Scoring scheme for this paper's attempt result - how many marks a
+    # correct answer is worth, and how many are deducted for a wrong one
+    # (0 = no negative marking). Both apply uniformly to every question in
+    # the paper (a PYQ paper has no per-question marks row, unlike Test/
+    # TestQuestion) - matches how real exam papers usually state their
+    # scheme ("+1, -0.25") rather than varying it question by question.
+    # Not nullable, unlike max_marks/time_limit_minutes: those are purely
+    # cosmetic (null hides the stat), but these two are always used to
+    # compute the student's actual score, so they need a real default (1/0)
+    # rather than silently skipping scoring for papers that don't set them.
+    marks_per_question: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default=text("1"))
+    negative_marking: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default=text("0"))
+
     # Students only see published papers; only a super admin flips this.
     is_published: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
 

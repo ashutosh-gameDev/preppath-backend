@@ -13,6 +13,10 @@ class PYQPaperCreate(ORMModel):
     course_id: uuid.UUID | None = None
     max_marks: float | None = None
     time_limit_minutes: int | None = None
+    # Scoring scheme applied to every question in the paper - see
+    # models/pyq_paper.py. Defaults match "no negative marking, 1 mark each".
+    marks_per_question: float = 1.0
+    negative_marking: float = 0.0
 
 
 class PYQPaperUpdate(ORMModel):
@@ -25,6 +29,8 @@ class PYQPaperUpdate(ORMModel):
     course_id: uuid.UUID | None = None
     max_marks: float | None = None
     time_limit_minutes: int | None = None
+    marks_per_question: float | None = None
+    negative_marking: float | None = None
     # Super-admin only (checked in the endpoint) - what this paper pays its
     # uploader. Null clears the override back to the platform default rate.
     payment_amount_paise: int | None = None
@@ -62,6 +68,8 @@ class PYQPaperOut(ORMModel):
     # landing page; a null time_limit_minutes means no countdown/auto-submit.
     max_marks: float | None = None
     time_limit_minutes: int | None = None
+    marks_per_question: float = 1.0
+    negative_marking: float = 0.0
     # This paper's own payout override (paise) - null means "use the
     # platform default rate" (see intern_payment_service.resolve_rate).
     # Resolved to an actual number for display alongside this field by the
@@ -95,6 +103,11 @@ class PYQPaperStudentOut(ORMModel):
     # on the attempt page.
     max_marks: float | None = None
     time_limit_minutes: int | None = None
+    # The scoring scheme used to compute PyqSubmitResult.score - shown on the
+    # landing page (e.g. "+1 / -0.25") so a student knows what they're
+    # attempting before they start. negative_marking=0 means none.
+    marks_per_question: float = 1.0
+    negative_marking: float = 0.0
 
 
 class PYQPaperProgressOut(ORMModel):
@@ -121,6 +134,13 @@ class PyqSubmitResult(ORMModel):
     incorrect_count: int
     skipped_count: int
     accuracy: float
+    # Actual exam-style score with the paper's negative marking applied
+    # (correct_count * marks_per_question - incorrect_count *
+    # negative_marking) - max_score is the paper's full question_count *
+    # marks_per_question, so the UI can show "score / max_score" regardless
+    # of how many questions were actually answered.
+    score: float = 0.0
+    max_score: float = 0.0
     review: list[QuestionReviewOut]
 
 
