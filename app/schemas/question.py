@@ -39,6 +39,18 @@ class QuestionBase(ORMModel):
     # Free text, not an enum, so a new language never needs a migration -
     # same reasoning as question_type. e.g. "English", "Hindi".
     language: str | None = None
+    # Bilingual paper support (RRB JE/UP Police/SSC etc. print every question
+    # in English AND Hindi) - a second language's text on the SAME question
+    # instead of a duplicate question row. All optional; correct_option/
+    # images are shared across both languages. See models/question.py.
+    language_secondary: str | None = None
+    question_text_secondary: str | None = None
+    option_a_secondary: str | None = None
+    option_b_secondary: str | None = None
+    option_c_secondary: str | None = None
+    option_d_secondary: str | None = None
+    correct_answer_text_secondary: str | None = None
+    explanation_secondary: str | None = None
     tags: list[str] = []
     # See models/question.py for what this is and how it gets cleared.
     needs_image: bool = False
@@ -83,7 +95,7 @@ class QuestionBase(ORMModel):
             raise ValueError("difficulty must be one of easy, medium, hard")
         return v
 
-    @field_validator("language")
+    @field_validator("language", "language_secondary")
     @classmethod
     def _normalize_language(cls, v: str | None) -> str | None:
         v = (v or "").strip()
@@ -143,6 +155,14 @@ class QuestionUpdate(ORMModel):
     difficulty: str | None = None
     question_type: str | None = None
     language: str | None = None
+    language_secondary: str | None = None
+    question_text_secondary: str | None = None
+    option_a_secondary: str | None = None
+    option_b_secondary: str | None = None
+    option_c_secondary: str | None = None
+    option_d_secondary: str | None = None
+    correct_answer_text_secondary: str | None = None
+    explanation_secondary: str | None = None
     tags: list[str] | None = None
     needs_image: bool | None = None
     image_note: str | None = None
@@ -225,12 +245,22 @@ class QuestionAttemptOut(ORMModel):
     source: str | None = None
     language: str | None = None
     exam_name: str | None = None
+    # Bilingual paper support - shown alongside the primary text/options so
+    # a student sees both languages at once, same as the admin-side fields.
+    language_secondary: str | None = None
+    question_text_secondary: str | None = None
+    option_a_secondary: str | None = None
+    option_b_secondary: str | None = None
+    option_c_secondary: str | None = None
+    option_d_secondary: str | None = None
 
 
 class QuestionReviewOut(QuestionAttemptOut):
     correct_option: str | None = None
     correct_answer_text: str | None = None
+    correct_answer_text_secondary: str | None = None
     explanation: str | None
+    explanation_secondary: str | None = None
 
 
 class ReportQuestionRequest(ORMModel):

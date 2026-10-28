@@ -31,6 +31,11 @@ FORMAT_VALUES = {"mcq", "fill_blank"}
 OPTIONAL_COLUMNS = [
     "course", "subject", "explanation", "topic", "subtopic", "exam", "year", "difficulty",
     "type", "source", "language", "tags", "format", "needs_image", "image_note",
+    # Bilingual paper columns (RRB JE/UP Police/SSC etc. print every question
+    # in English AND Hindi) - a second language's text for the SAME row
+    # instead of a duplicate question. See models/question.py.
+    "language_secondary", "question_secondary", "option_a_secondary", "option_b_secondary",
+    "option_c_secondary", "option_d_secondary", "correct_answer_secondary", "explanation_secondary",
 ]
 
 _TRUE_VALUES = {"true", "1", "yes", "y"}
@@ -236,6 +241,16 @@ def validate_rows(
                 question_type=(str(row.get("type") or "").strip().lower() or defaults.question_type or "practice"),
                 pyq_paper_id=pyq_paper_id,
                 language=language_raw or defaults.language,
+                # Bilingual paper's second-language text, if the row has any
+                # - all optional, left null for an ordinary single-language row.
+                language_secondary=str(row.get("language_secondary") or "").strip() or None,
+                question_text_secondary=str(row.get("question_secondary") or "").strip() or None,
+                option_a_secondary=str(row.get("option_a_secondary") or "").strip() or None,
+                option_b_secondary=str(row.get("option_b_secondary") or "").strip() or None,
+                option_c_secondary=str(row.get("option_c_secondary") or "").strip() or None,
+                option_d_secondary=str(row.get("option_d_secondary") or "").strip() or None,
+                correct_answer_text_secondary=str(row.get("correct_answer_secondary") or "").strip() or None,
+                explanation_secondary=str(row.get("explanation_secondary") or "").strip() or None,
                 tags=[t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else [],
                 needs_image=needs_image,
                 image_note=image_note,

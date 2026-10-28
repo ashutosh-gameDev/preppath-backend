@@ -121,6 +121,25 @@ class Question(Base, UUIDPKMixin, TimestampMixin):
     # migration, matching the extensibility approach used for question_type.
     # Independent of `pyq_paper_id` - a question's own language, not the paper's.
     language: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # Bilingual papers (RRB JE, UP Police, SSC etc. routinely print every
+    # question in English AND Hindi) carry a second language's text on the
+    # SAME question row instead of being uploaded as a duplicate question -
+    # students then see both at once. `language_secondary` names what
+    # language these _secondary fields are in (free text, same convention as
+    # `language`); all optional/nullable since most questions stay
+    # single-language. The correct option/letter and any images are shared
+    # across both languages (same diagram, same answer), so only the text
+    # itself is duplicated here.
+    language_secondary: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    question_text_secondary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    option_a_secondary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    option_b_secondary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    option_c_secondary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    option_d_secondary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    correct_answer_text_secondary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    explanation_secondary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     status: Mapped[str] = mapped_column(String(20), default=ContentStatus.DRAFT, nullable=False, index=True)
 
     # Set when a bulk import (or an admin by hand) noticed the source
