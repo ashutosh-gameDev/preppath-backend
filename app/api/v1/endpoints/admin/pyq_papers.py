@@ -167,8 +167,29 @@ def preview_pyq_paper(paper_id: uuid.UUID, admin: User = Depends(require_content
     )
 
 
+def _find_duplicate(db: Session, exam_name: str, year: int | None, label: str | None) -> PYQPaper | None:
+    """Same identity rule bulk_import_service's paper cache already uses
+    (exam_name + year + label, case-insensitive) - checked across every
+    uploader's papers, not just the caller's own (unlike _scope_own), so two
+    interns independently creating "the same paper" land on one row instead
+    of two silent duplicates neither can see the other made."""
+    norm_label = (label or "").strip().lower() or None
+    year_clause = PYQPaper.year.is_(None) if year is None else PYQPaper.year == year
+    candidates = db.execute(
+        select(PYQPaper).where(func.lower(PYQPaper.exam_name) == exam_name.strip().lower(), year_clause)
+    ).scalars().all()
+    for p in candidates:
+        if ((p.label or "").strip().lower() or None) == norm_label:
+            return p
+    return None
+
+
 @router.post("", response_model=PYQPaperOut)
 def create_pyq_paper(payload: PYQPaperCreate, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
+    existing = _find_duplicate(db, payload.exam_name, payload.year, payload.label)
+    if existing is not None:
+        count = db.execute(select(func.count(Question.id)).where(Question.pyq_paper_id == existing.id)).scalar_one()
+        return _to_out(existing, count)
     paper = PYQPaper(**payload.model_dump(), created_by=admin.id)
     db.add(paper)
     db.flush()
@@ -215,6 +236,8 @@ def update_pyq_paper(
 @router.delete("/{paper_id}", response_model=Message)
 def delete_pyq_paper(paper_id: uuid.UUID, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
     paper = _require_owned(db.get(PYQPaper, paper_id), admin)
+    if paper.is_published and admin.role == UserRole.CONTENT_EDITOR:
+        raise HTTPException(status_code=403, detail="Only an admin can delete a published PYQ paper")
     # Questions tagged to it are NOT deleted (pyq_paper_id just goes NULL via
     # the ON DELETE SET NULL FK) - deleting a paper is a labeling cleanup,
     # never a way to bulk-delete questions.

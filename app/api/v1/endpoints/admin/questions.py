@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin, require_content_access
 from app.db.session import get_db
 from app.models.admin import Report
-from app.models.enums import UserRole
+from app.models.enums import ContentStatus, UserRole
 from app.models.question import Question, Tag
 from app.models.user import User
 from app.schemas.common import Message, Page
@@ -200,9 +200,19 @@ def update_question_preview_text(
     return question
 
 
+def _require_deletable(question: Question, admin: User) -> None:
+    """A content_editor (intern) may delete their own draft/archived work
+    freely, but never a published question - once live for students (and
+    potentially already paid out, see intern_payment_service), removing it
+    is an admin-level call, not an everyday cleanup action."""
+    if question.status == ContentStatus.PUBLISHED and admin.role == UserRole.CONTENT_EDITOR:
+        raise HTTPException(status_code=403, detail="Only an admin can delete a published question")
+
+
 @router.delete("/{question_id}", response_model=Message)
 def delete_question(question_id: uuid.UUID, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
     question = _require_owned(db.get(Question, question_id), admin)
+    _require_deletable(question, admin)
     db.delete(question)
     db.flush()
     log_action(db, admin.id, "delete", "question", question_id)
@@ -327,13 +337,18 @@ def bulk_delete_questions(
 ):
     q = _scope_own(select(Question).where(Question.id.in_(payload.question_ids)), admin)
     questions = db.execute(q).scalars().all()
-    for question in questions:
+    deletable = [item for item in questions if not (item.status == ContentStatus.PUBLISHED and admin.role == UserRole.CONTENT_EDITOR)]
+    skipped = len(questions) - len(deletable)
+    for question in deletable:
         db.delete(question)
     db.flush()
     log_action(
         db, admin.id, "bulk_delete", "question", extra={"question_ids": [str(qid) for qid in payload.question_ids]}
     )
-    return Message(detail=f"{len(questions)} question(s) deleted")
+    detail = f"{len(deletable)} question(s) deleted"
+    if skipped:
+        detail += f" - {skipped} published question(s) skipped (only an admin can delete those)"
+    return Message(detail=detail)
 
 
 # --- Reports --------------------------------------------------------------------
