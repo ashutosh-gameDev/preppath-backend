@@ -32,6 +32,7 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
         if course is None:
             course = Course(
                 name=course_in.name.strip(),
+                name_secondary=course_in.name_secondary,
                 description=course_in.description,
                 icon=course_in.icon,
                 is_published=course_in.is_published,
@@ -42,6 +43,8 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
             courses_created += 1
         else:
             courses_skipped.append(course_in.name)
+            if course_in.name_secondary and not course.name_secondary:
+                course.name_secondary = course_in.name_secondary
 
         # Whatever gets created under a published course goes live with it -
         # students only see published syllabus items, so a published course
@@ -55,6 +58,7 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
             if subject is None:
                 subject = Subject(
                     name=subject_in.name.strip(),
+                    name_secondary=subject_in.name_secondary,
                     order_index=subject_in.order_index,
                     is_published=subject_in.is_published or publish_children,
                     course_id=course.id,
@@ -63,12 +67,15 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
                 db.add(subject)
                 db.flush()
                 subjects_created += 1
+            elif subject_in.name_secondary and not subject.name_secondary:
+                subject.name_secondary = subject_in.name_secondary
 
             for topic_in in subject_in.topics:
                 topic = _find_by_name_ci(db, Topic, topic_in.name, subject_id=subject.id)
                 if topic is None:
                     topic = Topic(
                         name=topic_in.name.strip(),
+                        name_secondary=topic_in.name_secondary,
                         order_index=topic_in.order_index,
                         is_published=topic_in.is_published or publish_children,
                         video_url=topic_in.video_url,
@@ -78,12 +85,15 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
                     db.add(topic)
                     db.flush()
                     topics_created += 1
+                elif topic_in.name_secondary and not topic.name_secondary:
+                    topic.name_secondary = topic_in.name_secondary
 
                 for subtopic_in in topic_in.subtopics:
                     subtopic = _find_by_name_ci(db, Subtopic, subtopic_in.name, topic_id=topic.id)
                     if subtopic is None:
                         subtopic = Subtopic(
                             name=subtopic_in.name.strip(),
+                            name_secondary=subtopic_in.name_secondary,
                             order_index=subtopic_in.order_index,
                             is_published=subtopic_in.is_published or publish_children,
                             youtube_videos=subtopic_in.youtube_videos,
@@ -93,13 +103,16 @@ def import_courses(db: Session, payload: BulkCourseImportRequest) -> BulkCourseI
                         db.add(subtopic)
                         db.flush()
                         subtopics_created += 1
-                    elif subtopic_in.youtube_videos and not subtopic.youtube_videos:
-                        # A re-import that adds videos to a subtopic created
-                        # earlier without any (e.g. a first pass that only
-                        # had names) - fill them in rather than requiring a
-                        # one-at-a-time edit for something bulk import itself
-                        # could just as well backfill.
-                        subtopic.youtube_videos = subtopic_in.youtube_videos
+                    else:
+                        if subtopic_in.youtube_videos and not subtopic.youtube_videos:
+                            # A re-import that adds videos to a subtopic created
+                            # earlier without any (e.g. a first pass that only
+                            # had names) - fill them in rather than requiring a
+                            # one-at-a-time edit for something bulk import itself
+                            # could just as well backfill.
+                            subtopic.youtube_videos = subtopic_in.youtube_videos
+                        if subtopic_in.name_secondary and not subtopic.name_secondary:
+                            subtopic.name_secondary = subtopic_in.name_secondary
 
     return BulkCourseImportResult(
         courses_created=courses_created,

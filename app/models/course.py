@@ -13,6 +13,12 @@ class Course(Base, UUIDPKMixin, TimestampMixin):
     __tablename__ = "courses"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Optional translated display name (e.g. Hindi) shown ALONGSIDE `name`,
+    # never instead of it. Deliberately NOT a second Course row - every
+    # match/lookup (slugs, bulk import's find-by-name, pickers) stays keyed
+    # on `name` alone, so adding a translation can never create a duplicate
+    # or confuse selection the way a parallel Hindi-named course would.
+    name_secondary: Mapped[str | None] = mapped_column(String(255), nullable=True)
     slug: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     icon: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -36,6 +42,9 @@ class Subject(Base, UUIDPKMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # See Course.name_secondary - same "translation attached to the same
+    # row, never a second row" rule applies at every level of the hierarchy.
+    name_secondary: Mapped[str | None] = mapped_column(String(255), nullable=True)
     slug: Mapped[str] = mapped_column(String(255), nullable=False)
     order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -54,6 +63,8 @@ class Topic(Base, UUIDPKMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # See Course.name_secondary.
+    name_secondary: Mapped[str | None] = mapped_column(String(255), nullable=True)
     slug: Mapped[str] = mapped_column(String(255), nullable=False)
     order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -80,6 +91,8 @@ class Subtopic(Base, UUIDPKMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("topics.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # See Course.name_secondary.
+    name_secondary: Mapped[str | None] = mapped_column(String(255), nullable=True)
     slug: Mapped[str] = mapped_column(String(255), nullable=False)
     order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

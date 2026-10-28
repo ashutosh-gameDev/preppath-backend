@@ -7,6 +7,10 @@ from app.schemas.common import ORMModel
 
 class TopicBase(ORMModel):
     name: str
+    # Optional translated display name (e.g. Hindi), shown alongside `name` -
+    # never a second Topic row. Matching/selection (slugs, bulk import,
+    # pickers) always keys off `name` alone. See models/course.py.
+    name_secondary: str | None = None
     order_index: int = 0
     is_published: bool = False
     video_url: str | None = None
@@ -18,6 +22,7 @@ class TopicCreate(TopicBase):
 
 class TopicUpdate(ORMModel):
     name: str | None = None
+    name_secondary: str | None = None
     order_index: int | None = None
     is_published: bool | None = None
     video_url: str | None = None
@@ -25,6 +30,7 @@ class TopicUpdate(ORMModel):
 
 class SubtopicBase(ORMModel):
     name: str
+    name_secondary: str | None = None
     order_index: int = 0
     is_published: bool = False
     youtube_videos: list[str] = Field(default_factory=list)
@@ -36,6 +42,7 @@ class SubtopicCreate(SubtopicBase):
 
 class SubtopicUpdate(ORMModel):
     name: str | None = None
+    name_secondary: str | None = None
     order_index: int | None = None
     is_published: bool | None = None
     youtube_videos: list[str] | None = None
@@ -96,6 +103,7 @@ class CustomTopicOut(ORMModel):
 
 class SubjectBase(ORMModel):
     name: str
+    name_secondary: str | None = None
     order_index: int = 0
     is_published: bool = False
 
@@ -106,6 +114,7 @@ class SubjectCreate(SubjectBase):
 
 class SubjectUpdate(ORMModel):
     name: str | None = None
+    name_secondary: str | None = None
     order_index: int | None = None
     is_published: bool | None = None
 
@@ -119,6 +128,7 @@ class SubjectOut(SubjectBase):
 
 class CourseBase(ORMModel):
     name: str
+    name_secondary: str | None = None
     description: str | None = None
     icon: str | None = None
     is_published: bool = False
@@ -130,6 +140,7 @@ class CourseCreate(CourseBase):
 
 class CourseUpdate(ORMModel):
     name: str | None = None
+    name_secondary: str | None = None
     description: str | None = None
     icon: str | None = None
     is_published: bool | None = None
@@ -154,6 +165,10 @@ class CourseTreeOut(CourseOut):
 
 class BulkSubtopicInput(ORMModel):
     name: str
+    # Translated display name (e.g. Hindi) for the SAME subtopic - never
+    # create a separate subtopic for a second language, it only confuses
+    # matching/selection. See models/course.py.
+    name_secondary: str | None = None
     order_index: int = 0
     is_published: bool = False
     youtube_videos: list[str] = Field(default_factory=list)
@@ -161,6 +176,7 @@ class BulkSubtopicInput(ORMModel):
 
 class BulkTopicInput(ORMModel):
     name: str
+    name_secondary: str | None = None
     order_index: int = 0
     is_published: bool = False
     video_url: str | None = None
@@ -169,6 +185,7 @@ class BulkTopicInput(ORMModel):
 
 class BulkSubjectInput(ORMModel):
     name: str
+    name_secondary: str | None = None
     order_index: int = 0
     is_published: bool = False
     topics: list[BulkTopicInput] = Field(default_factory=list)
@@ -176,6 +193,7 @@ class BulkSubjectInput(ORMModel):
 
 class BulkCourseInput(ORMModel):
     name: str
+    name_secondary: str | None = None
     description: str | None = None
     icon: str | None = None
     is_published: bool = False
