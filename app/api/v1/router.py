@@ -41,6 +41,7 @@ from app.api.v1.endpoints.admin import (
     job_postings as admin_job_postings,
     pyq_papers as admin_pyq_papers,
     questions as admin_questions,
+    referral_campaigns as admin_referral_campaigns,
     settings as admin_settings,
     team as admin_team,
     tests as admin_tests,
@@ -93,4 +94,5 @@ api_router.include_router(admin_users.router)
 api_router.include_router(admin_settings.router)
 api_router.include_router(admin_team.router)
 api_router.include_router(admin_growth.router)
+api_router.include_router(admin_referral_campaigns.router)
 api_router.include_router(admin_demographics.router)

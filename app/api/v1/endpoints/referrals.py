@@ -14,6 +14,7 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.enums import UserTier
+from app.models.referral_campaign import ReferralCampaign
 from app.models.user import Profile, User
 from app.schemas.referral import ReferralClaimRequest, ReferralClaimResult, ReferralMeOut
 from app.services import settings_service
@@ -52,16 +53,36 @@ def claim_referral(
     legitimate reasons (already claimed, too old, bad code, self-referral)."""
     if not can_claim_referral(user):
         return ReferralClaimResult(claimed=False, detail="This account can no longer claim a referral.")
-    referrer = db.execute(select(User).where(User.referral_code == payload.code.strip().upper())).scalar_one_or_none()
-    if referrer is None or referrer.id == user.id:
+    code = payload.code.strip().upper()
+
+    referrer = db.execute(select(User).where(User.referral_code == code)).scalar_one_or_none()
+    if referrer is not None and referrer.id != user.id:
+        user.referred_by = referrer.id
+        db.flush()
+        reward_days = int(settings_service.get_setting(db, "referral.reward_days"))
+        referrer_profile = db.get(Profile, referrer.id)
+        if referrer_profile is not None:
+            plan = Plan(key="referral", label="Referral bonus", amount_paise=0, duration_days=reward_days, tier=UserTier.PRO)
+            grant_premium(db, referrer_profile, plan)
+        db.flush()
+        return ReferralClaimResult(claimed=True, detail=f"Referral recorded - your friend just earned {reward_days} days of Pro!")
+
+    # Not a student's personal code - try a super-admin-created marketing
+    # code instead (see models/referral_campaign.py). Reward, if any, goes
+    # to the NEW student themselves - there's no referring student here.
+    campaign = db.execute(
+        select(ReferralCampaign).where(ReferralCampaign.code == code, ReferralCampaign.is_active.is_(True))
+    ).scalar_one_or_none()
+    if campaign is None:
         return ReferralClaimResult(claimed=False, detail="That referral code isn't valid.")
 
-    user.referred_by = referrer.id
+    user.signup_campaign_id = campaign.id
     db.flush()
-    reward_days = int(settings_service.get_setting(db, "referral.reward_days"))
-    referrer_profile = db.get(Profile, referrer.id)
-    if referrer_profile is not None:
-        plan = Plan(key="referral", label="Referral bonus", amount_paise=0, duration_days=reward_days, tier=UserTier.PRO)
-        grant_premium(db, referrer_profile, plan)
-    db.flush()
-    return ReferralClaimResult(claimed=True, detail=f"Referral recorded - your friend just earned {reward_days} days of Pro!")
+    if campaign.reward_days > 0:
+        profile = db.get(Profile, user.id)
+        if profile is not None:
+            plan = Plan(key="referral_campaign", label=f"Promo code {campaign.code}", amount_paise=0, duration_days=campaign.reward_days, tier=UserTier.PRO)
+            grant_premium(db, profile, plan)
+        db.flush()
+        return ReferralClaimResult(claimed=True, detail=f"Code applied - you just earned {campaign.reward_days} days of Pro!")
+    return ReferralClaimResult(claimed=True, detail="Code applied!")

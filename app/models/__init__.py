@@ -25,6 +25,7 @@ from app.models.mistake_dismissal import MistakeDismissal  # noqa: F401
 from app.models.reminder import Reminder  # noqa: F401
 from app.models.study_session import StudySession, LeaderboardReward  # noqa: F401
 from app.models.custom_topic import CustomTopic  # noqa: F401
+from app.models.referral_campaign import ReferralCampaign  # noqa: F401
 
 __all__ = [
     "Base",
@@ -64,4 +65,5 @@ __all__ = [
     "StudySession",
     "LeaderboardReward",
     "CustomTopic",
+    "ReferralCampaign",
 ]

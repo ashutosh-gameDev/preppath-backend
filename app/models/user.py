@@ -39,6 +39,13 @@ class User(Base, TimestampMixin):
     referred_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Same claim (POST /referrals/claim), but for a super-admin-created
+    # marketing code (see models/referral_campaign.py) instead of another
+    # student's personal code - mutually exclusive with `referred_by` (one
+    # claim per account, whichever kind of code it was).
+    signup_campaign_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("referral_campaigns.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     profile: Mapped["Profile"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
