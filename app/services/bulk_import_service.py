@@ -93,7 +93,7 @@ def _lookup_cache(
     db: Session,
 ) -> tuple[
     dict[str, Course], dict[tuple[uuid.UUID, str], Subject], dict[tuple[uuid.UUID, str], Topic],
-    dict[tuple[uuid.UUID, str], Subtopic], dict[tuple[str, int | None, str | None], PYQPaper],
+    dict[tuple[uuid.UUID, str], Subtopic], dict[tuple[str, int | None, str | None, str | None], PYQPaper],
 ]:
     courses = {c.name.strip().lower(): c for c in db.execute(select(Course)).scalars().all()}
     subjects = {}
@@ -107,7 +107,11 @@ def _lookup_cache(
         subtopics[(st.topic_id, st.name.strip().lower())] = st
     papers = {}
     for p in db.execute(select(PYQPaper)).scalars().all():
-        papers[(p.exam_name.strip().lower(), p.year, (p.label or "").strip().lower() or None)] = p
+        # Keyed by language too (not just exam/year/label) - some exams
+        # release separate English and Hindi paper PDFs, which need two
+        # distinct PYQPaper rows, not one row whichever language gets
+        # uploaded/matched first.
+        papers[(p.exam_name.strip().lower(), p.year, (p.label or "").strip().lower() or None, (p.language or "").strip().lower() or None)] = p
     return courses, subjects, topics, subtopics, papers
 
 
@@ -193,16 +197,22 @@ def validate_rows(
         exam_raw = str(row.get("exam", "")).strip()
         year_raw = str(row.get("year", "")).strip()
         source_raw = str(row.get("source", "")).strip()
+        # The row's own `language` column, if present, else the paper-level
+        # default - same precedence the question's own `language` field
+        # uses below, so a row that sets its paper via columns (not the
+        # Upload Paper screen's picker) still lands on the right language's
+        # paper instead of always matching the first-uploaded one.
+        paper_language_raw = str(row.get("language", "")).strip() or defaults.language
         if exam_raw:
             try:
                 paper_year = int(float(year_raw)) if year_raw else None
             except ValueError:
                 paper_year = None
-            cache_key = (exam_raw.lower(), paper_year, source_raw.lower() or None)
+            cache_key = (exam_raw.lower(), paper_year, source_raw.lower() or None, (paper_language_raw or "").lower() or None)
             paper = papers.get(cache_key)
             if paper is None:
                 paper = PYQPaper(
-                    exam_name=exam_raw, year=paper_year, label=source_raw or None,
+                    exam_name=exam_raw, year=paper_year, label=source_raw or None, language=paper_language_raw or None,
                     course_id=course.id if course else defaults.course_id,
                 )
                 db.add(paper)
@@ -219,7 +229,6 @@ def validate_rows(
             continue
 
         try:
-            language_raw = str(row.get("language", "")).strip()
             tags_raw = str(row.get("tags", "")).strip()
             question_text = str(row["question"]).strip()
             needs_image_raw = str(row.get("needs_image", "")).strip()
@@ -240,7 +249,7 @@ def validate_rows(
                 difficulty=(str(row.get("difficulty") or "").strip().lower() or defaults.difficulty or "medium"),
                 question_type=(str(row.get("type") or "").strip().lower() or defaults.question_type or "practice"),
                 pyq_paper_id=pyq_paper_id,
-                language=language_raw or defaults.language,
+                language=paper_language_raw,
                 # Bilingual paper's second-language text, if the row has any
                 # - all optional, left null for an ordinary single-language row.
                 language_secondary=str(row.get("language_secondary") or "").strip() or None,

@@ -168,26 +168,34 @@ def preview_pyq_paper(paper_id: uuid.UUID, admin: User = Depends(require_content
     )
 
 
-def _find_duplicate(db: Session, exam_name: str, year: int | None, label: str | None) -> PYQPaper | None:
+def _find_duplicate(
+    db: Session, exam_name: str, year: int | None, label: str | None, language: str | None
+) -> PYQPaper | None:
     """Same identity rule bulk_import_service's paper cache already uses
-    (exam_name + year + label, case-insensitive) - checked across every
-    uploader's papers, not just the caller's own (unlike _scope_own), so two
-    interns independently creating "the same paper" land on one row instead
-    of two silent duplicates neither can see the other made."""
+    (exam_name + year + label + language, case-insensitive) - checked across
+    every uploader's papers, not just the caller's own (unlike _scope_own),
+    so two interns independently creating "the same paper" land on one row
+    instead of two silent duplicates neither can see the other made.
+    `language` is part of the identity (not just a descriptive field) because
+    some exams (RRB JE, UP Police, etc.) release the English and Hindi paper
+    as two separate PDFs - those need two separate PYQPaper rows, not one
+    paper silently holding both languages' questions under whichever
+    language got uploaded first."""
     norm_label = (label or "").strip().lower() or None
+    norm_language = (language or "").strip().lower() or None
     year_clause = PYQPaper.year.is_(None) if year is None else PYQPaper.year == year
     candidates = db.execute(
         select(PYQPaper).where(func.lower(PYQPaper.exam_name) == exam_name.strip().lower(), year_clause)
     ).scalars().all()
     for p in candidates:
-        if ((p.label or "").strip().lower() or None) == norm_label:
+        if ((p.label or "").strip().lower() or None) == norm_label and ((p.language or "").strip().lower() or None) == norm_language:
             return p
     return None
 
 
 @router.post("", response_model=PYQPaperOut)
 def create_pyq_paper(payload: PYQPaperCreate, admin: User = Depends(require_content_access), db: Session = Depends(get_db)):
-    existing = _find_duplicate(db, payload.exam_name, payload.year, payload.label)
+    existing = _find_duplicate(db, payload.exam_name, payload.year, payload.label, payload.language)
     if existing is not None:
         count = db.execute(select(func.count(Question.id)).where(Question.pyq_paper_id == existing.id)).scalar_one()
         return _to_out(existing, count)

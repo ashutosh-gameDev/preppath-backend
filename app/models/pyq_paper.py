@@ -83,7 +83,15 @@ class PYQPaper(Base, UUIDPKMixin, TimestampMixin):
             parts.append(str(self.year))
         if self.label:
             parts.append(self.label)
-        return " ".join(parts)
+        name = " ".join(parts)
+        # Without this, an exam that releases separate English and Hindi
+        # paper PDFs (RRB JE, UP Police, etc.) produces two rows with the
+        # exact same name - a student (or admin, in the CRM's own paper
+        # picker - see pyqPaperLabel) can't tell them apart to pick the
+        # right one.
+        if self.language:
+            name += f" ({self.language})"
+        return name
 
     @property
     def uploaded_by(self) -> str | None:
